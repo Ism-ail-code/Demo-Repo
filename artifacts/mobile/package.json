@@ -63,6 +63,6 @@
     "@reactvision/react-viro": "^2.44.0",
     "@supabase/supabase-js": "^2.108.2",
     "expo-camera": "^17.0.10",
-    "expo-updates": "^56.0.19"
+    "expo-updates": "~0.28.18"
   }
 }
