@@ -1,0 +1,14 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "mSiZjkifIjDsCSDVismzi"
+uri = "file://artifacts/mobile/assets/images/icon.png"
+type = "image"
+title = "ar-commerce-app-icon"
+
+[[generated]]
+id = "STYKUerwXXVZc2qhJv3KJ"
+uri = "file://artifacts/mobile/assets/images/splash.png"
+type = "image"
+title = "ar-commerce-splash"

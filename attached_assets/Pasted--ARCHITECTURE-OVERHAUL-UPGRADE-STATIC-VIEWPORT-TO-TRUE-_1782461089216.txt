@@ -1,0 +1,22 @@
+# ARCHITECTURE OVERHAUL: UPGRADE STATIC VIEWPORT TO TRUE HARDWARE-TRACKING WORLD AR
+
+The current 3D viewport implementation functions as a static 3D orbital object layer overlaid on a raw camera feed. It lacks spatial plane-tracking, surface anchoring, and real-world environment integration because standard Expo Go environments restrict native ARKit/ARCore binaries. 
+
+We need to overhaul the application core immediately to implement true Native Surface AR. Move the codebase from basic Expo sandbox tracking into an Expo Prebuild configuration using native mobile dependencies.
+
+## 1. Install Native AR Core Packages
+Add and configure these production-grade tracking libraries to the project's native build file dependencies:
+- Install `ar_flutter_plugin` (or equivalent native React Native wrappers like `@viro-community/viro` or `expo-gl` mixed with native ARKit/ARCore extensions).
+- Ensure configuration properties inject native `cameraPermission` and `NSCameraUsageDescription` strings.
+
+## 2. Implement Real-World Surface Plane Detection & Anchoring
+Replace the static `ARProductViewer` orbit screen with a high-performance Spatial Tracking Viewport:
+- **Surface Scanning state**: When the camera boots up, display a subtle, light-gray dot matrix or grid overlay indicating that the phone is actively scanning for physical flat surfaces (floors, rugs, or tables).
+- **Spatial Anchoring**: When the user taps a detected flat surface plane on their device screen, the app must drop a native mathematical **Anchor**. Secure and pin the `.glb` (Android) or `.usdz` (iOS) product mesh directly onto that anchor.
+- **Physical Scale Lock**: Ensure the object responds accurately to real-world physics. As the user physically walks around the room with their phone, the product must remain completely locked in place on the floor, allowing them to inspect it from different angles, distances, and heights at 60 FPS without floating or drifting.
+
+## 3. Preserve the Dynamic Color Tint & Supabase Streaming Pipelines
+- Retain our active `supabaseClient` streaming service loops. 
+- Ensure that tapping our color variant swatch tray continues to update the material diffuse color parameters (`pbrMetallicRoughness.baseColorFactor`) of the natively anchored 3D model mesh *in real-time* without losing its physical floor anchor position and without triggering a network re-download.
+
+Generate the updated native project configuration dependencies, overrode camera viewport controllers, and native spatial plane anchoring managers to achieve true world integration.

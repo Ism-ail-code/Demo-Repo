@@ -1,0 +1,18 @@
+# INFRASTRUCTURE UPGRADE & COMPREHENSIVE WORKSPACE DATA EXPORT PROTOCOL
+
+We are completely abandoning the Expo Go sandbox ecosystem to bypass its hardware constraints and unlock true world-tracking hardware AR capabilities. We are preparing to shift this project to a native mobile workspace environment. 
+
+Please perform these two actions immediately in parallel:
+
+## 1. Execute Native Prebuild Configurations
+- **Eject Configuration**: Update our `app.json` configuration file to include fully structured native iOS and Android bundle blocks (e.g., package name: `com.rapidify.arsaas`), complete with dedicated native hardware `cameraPermission` variables and device hardware features keys [Example 4].
+- **AR Hardware Integration Blueprint**: Replace our static 3D web-canvas orbit overlay. Lay down the architectural files and module setup to bind a production-grade native surface AR engine wrapper (such as `@viro-community/viro` or `@babylonjs/react-native`) that directly initializes true physical **Google ARCore** and **Apple ARKit** world-tracking pipelines. Ensure that users can physically walk around 3D models and interactively drag, drop, and anchor assets natively over flat surface planes.
+
+## 2. Complete Codebase & Chat Data Export Package
+Because we are preparing to shift this application workspace to a fresh standalone development agent, you must compile and export all project telemetry before terminating this thread. Please generate a single, highly dense summary document block at the very end of your response containing:
+
+1. **The Definitive Directory Manifest**: A text map detailing every active file and path folder inside our repository layout (`/src/services/supabase.ts`, `/src/hooks/useProducts.ts`, components, routes, etc.).
+2. **The Environment Secret Template**: A safe copy of all standard required `.env` variables and `EXPO_PUBLIC_` prefixes required to run this app seamlessly on a new agent.
+3. **The Current State Summary**: A short summary of our live connections (Active Supabase URL, verified table names, and tracking proxy endpoints) so the next development engine can pick up right where you left off with zero loss of progress.
+
+Generate the native config updates and compile this complete migration summary data block now.

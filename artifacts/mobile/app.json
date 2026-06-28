@@ -1,0 +1,119 @@
+{
+  "expo": {
+    "name": "AR Commerce",
+    "slug": "mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "arcommerce",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "splash": {
+      "image": "./assets/images/splash.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#FAFAFA"
+    },
+    "ios": {
+      "bundleIdentifier": "com.rapidify.arsaas",
+      "buildNumber": "1",
+      "supportsTablet": false,
+      "requireFullScreen": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "AR Commerce uses the camera to anchor 3D products in your real-world space via ARKit world-tracking.",
+        "NSMotionUsageDescription": "AR Commerce uses device motion sensors to stabilize AR world-tracking and spatial anchoring.",
+        "NSPhotoLibraryUsageDescription": "AR Commerce saves AR captures to your photo library.",
+        "NSPhotoLibraryAddUsageDescription": "AR Commerce saves AR captures to your photo library.",
+        "UIRequiredDeviceCapabilities": ["arkit", "camera-flash"],
+        "UIBackgroundModes": []
+      },
+      "entitlements": {
+        "com.apple.developer.arkit": true
+      },
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.rapidify.arsaas",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#FAFAFA"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
+      "features": [
+        {
+          "name": "android.hardware.camera.ar",
+          "required": false
+        },
+        {
+          "name": "android.hardware.camera",
+          "required": true
+        }
+      ]
+    },
+    "web": {
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "https://replit.com/"
+        }
+      ],
+      "expo-font",
+      "expo-web-browser",
+      [
+        "@reactvision/react-viro",
+        {
+          "cameraPermission": "AR Commerce uses the camera to anchor 3D products in your real-world space via ARKit and ARCore world-tracking."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "AR Commerce uses the camera to anchor 3D products in your real-world space via ARKit and ARCore world-tracking.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26,
+            "targetSdkVersion": 35,
+            "compileSdkVersion": 35,
+            "buildToolsVersion": "35.0.0",
+            "ndkVersion": "28.2.13676358"
+          },
+          "ios": {
+            "deploymentTarget": "16.4"
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "updates": {
+      "url": "https://u.expo.dev/com.rapidify.arsaas",
+      "fallbackToCacheTimeout": 0
+    },
+    "extra": {
+      "eas": {
+        "projectId": "com.rapidify.arsaas"
+      }
+    }
+  }
+}
