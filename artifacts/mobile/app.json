@@ -26,8 +26,12 @@
         "NSMotionUsageDescription": "AR Commerce uses device motion sensors to stabilize AR world-tracking and spatial anchoring.",
         "NSPhotoLibraryUsageDescription": "AR Commerce saves AR captures to your photo library.",
         "NSPhotoLibraryAddUsageDescription": "AR Commerce saves AR captures to your photo library.",
-        "UIRequiredDeviceCapabilities": ["arkit", "camera-flash"],
-        "UIBackgroundModes": []
+        "UIRequiredDeviceCapabilities": [
+          "arkit",
+          "camera-flash"
+        ],
+        "UIBackgroundModes": [],
+        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to use your microphone"
       },
       "entitlements": {
         "com.apple.developer.arkit": true
@@ -112,8 +116,9 @@
     },
     "extra": {
       "eas": {
-        "projectId": "com.rapidify.arsaas"
+        "projectId": "91790adf-6d77-4396-b988-cfaaf3c72ddf"
       }
-    }
+    },
+    "owner": "waa_ge"
   }
 }
