@@ -1,14 +1,38 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 import {
   Viro3DObject,
   ViroAmbientLight,
   ViroARScene,
   ViroARSceneNavigator,
+  ViroDirectionalLight,
+  ViroLightingEnvironment,
+  ViroMaterials,
   ViroNode,
+  ViroOmniLight,
   ViroSpotLight,
 } from "@reactvision/react-viro";
+
+const MIN_SCALE = 0.1;
+const MAX_SCALE = 2.0;
+
+ViroMaterials.createMaterials({
+  productPBR: {
+    lightingModel: "PBR",
+    roughness: 0.4,
+    metalness: 0.1,
+    diffuseIntensity: 1.0,
+    writesToDepthBuffer: true,
+    readsFromDepthBuffer: true,
+  },
+});
 
 export interface NativeARSessionProps {
   glbUrl: string;
@@ -36,6 +60,16 @@ function ARScene({ sceneNavigator }: ARSceneProps) {
   const { glbUrl, usdzUrl, position, onAnchorFound, onError, onModelLoaded } =
     sceneNavigator.viroAppProps;
 
+  const [modelLoaded, setModelLoaded] = useState(false);
+  const [scale, setScale] = useState(0.3);
+  const [rotation, setRotation] = useState<[number, number, number]>([0, 0, 0]);
+  const [modelPosition, setModelPosition] = useState<
+    [number, number, number]
+  >(position);
+
+  const scaleRef = useRef(0.3);
+  const rotRef = useRef(0);
+
   const onPlaneDetected = useCallback(() => {
     onAnchorFound?.();
   }, [onAnchorFound]);
@@ -44,28 +78,117 @@ function ARScene({ sceneNavigator }: ARSceneProps) {
     Platform.OS === "ios" && usdzUrl ? { uri: usdzUrl } : { uri: glbUrl };
   const modelType = Platform.OS === "ios" && usdzUrl ? "VRX" : "GLB";
 
+  const handleDrag = useCallback(
+    (dragToPos: [number, number, number]) => {
+      setModelPosition(dragToPos);
+    },
+    []
+  );
+
+  const handlePinch = useCallback(
+    (
+      pinchState: number,
+      scaleFactor: number
+    ) => {
+      if (pinchState === 1 || pinchState === 2) {
+        const newScale = Math.max(
+          MIN_SCALE,
+          Math.min(MAX_SCALE, scaleRef.current * scaleFactor)
+        );
+        scaleRef.current = newScale;
+        setScale(newScale);
+      }
+      if (pinchState === 3) {
+        scaleRef.current = scale;
+      }
+    },
+    [scale]
+  );
+
+  const handleRotate = useCallback(
+    (
+      rotateState: number,
+      rotationFactor: number
+    ) => {
+      if (rotateState === 1 || rotateState === 2) {
+        const newY = rotRef.current + rotationFactor;
+        rotRef.current = newY;
+        setRotation([0, newY, 0]);
+      }
+      if (rotateState === 3) {
+        rotRef.current = rotation[1];
+      }
+    },
+    [rotation]
+  );
+
   return (
     <ViroARScene onTrackingUpdated={onPlaneDetected}>
-      <ViroAmbientLight color="#ffffff" intensity={300} />
-      <ViroSpotLight
-        position={[0, 5, -1]}
+      <ViroLightingEnvironment
+        source={{ uri: "https://modelviewer.dev/shared-assets/environments/neutral.hdr" }}
+        onLoadEnd={() => {}}
+      />
+
+      <ViroAmbientLight color="#ffffff" intensity={200} />
+
+      <ViroDirectionalLight
         color="#ffffff"
+        intensity={600}
+        direction={[0, -1, -1]}
+        castsShadow
+        shadowOpacity={0.65}
+        shadowMapSize={2048}
+        shadowOrthographicSize={5}
+        shadowOrthographicPosition={[0, 5, 0]}
+        shadowNearZ={1}
+        shadowFarZ={15}
+        shadowBias={0.5}
+      />
+
+      <ViroSpotLight
+        position={[2, 5, 2]}
+        color="#ffffff"
+        intensity={400}
         direction={[0, -1, 0]}
         attenuationStartDistance={5}
-        attenuationEndDistance={10}
+        attenuationEndDistance={15}
+        innerAngle={30}
+        outerAngle={60}
         castsShadow
+        shadowOpacity={0.5}
+        shadowMapSize={1024}
       />
-      <ViroNode position={position} dragType="FixedToWorld" onDrag={() => {}}>
+
+      <ViroOmniLight
+        position={[-3, 3, -3]}
+        color="#e8e0ff"
+        intensity={200}
+        attenuationStartDistance={3}
+        attenuationEndDistance={10}
+      />
+
+      <ViroNode
+        position={modelPosition}
+        rotation={rotation}
+        scale={[scale, scale, scale]}
+        dragType="FixedToWorld"
+        onDrag={handleDrag}
+        onPinch={handlePinch}
+        onRotate={handleRotate}
+      >
         <Viro3DObject
           source={modelSource}
           type={modelType}
-          scale={[0.3, 0.3, 0.3]}
+          materials={["productPBR"]}
+          lightReceivingBitMask={3}
+          shadowCastingBitMask={2}
           onLoadEnd={() => {
+            setModelLoaded(true);
             onModelLoaded?.();
           }}
           onLoadStart={() => {}}
-          onError={() => {
-            onError?.("Failed to load 3D model");
+          onError={(error: any) => {
+            onError?.(`Failed to load 3D model: ${error}`);
           }}
         />
       </ViroNode>
@@ -106,9 +229,7 @@ export function NativeARSession({
     <View style={StyleSheet.absoluteFill}>
       <ViroARSceneNavigator
         autofocus
-        initialScene={{
-          scene: ARScene,
-        }}
+        initialScene={{ scene: ARScene }}
         viroAppProps={{
           glbUrl,
           usdzUrl,
@@ -118,6 +239,11 @@ export function NativeARSession({
           onError,
           onModelLoaded: handleModelLoaded,
         }}
+        hdrEnabled={true}
+        pbrEnabled={true}
+        bloomEnabled={true}
+        shadowsEnabled={true}
+        multisamplingEnabled={true}
         style={StyleSheet.absoluteFill}
       />
 
@@ -130,8 +256,27 @@ export function NativeARSession({
               {Platform.OS === "ios" ? ".usdz" : ".glb"} · Downloading assets...
             </Text>
             <Text style={styles.loadingHint}>
-              Point camera at a flat surface to anchor
+              Pinch to scale · Twist to rotate · Drag to reposition
             </Text>
+          </View>
+        </View>
+      )}
+
+      {modelLoaded && (
+        <View style={styles.gestureHints}>
+          <View style={styles.gestureHintRow}>
+            <View style={styles.gesturePill}>
+              <Text style={styles.gestureIcon}>☝</Text>
+              <Text style={styles.gestureLabel}>Drag to move</Text>
+            </View>
+            <View style={styles.gesturePill}>
+              <Text style={styles.gestureIcon}>✊</Text>
+              <Text style={styles.gestureLabel}>Pinch to scale</Text>
+            </View>
+            <View style={styles.gesturePill}>
+              <Text style={styles.gestureIcon}>🔄</Text>
+              <Text style={styles.gestureLabel}>Twist to rotate</Text>
+            </View>
           </View>
         </View>
       )}
@@ -179,5 +324,34 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.35)",
     fontSize: 12,
     marginTop: 4,
+  },
+  gestureHints: {
+    position: "absolute",
+    bottom: 180,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    pointerEvents: "none",
+  },
+  gestureHintRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  gesturePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.6)",
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    gap: 6,
+  },
+  gestureIcon: {
+    fontSize: 14,
+  },
+  gestureLabel: {
+    color: "rgba(255,255,255,0.8)",
+    fontSize: 11,
+    fontWeight: "500",
   },
 });

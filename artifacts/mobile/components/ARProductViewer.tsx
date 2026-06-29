@@ -2,12 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
 import React, { useCallback, useState } from "react";
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { ColorSwatch } from "@/components/ColorSwatch";
 import { NativeARSession } from "@/components/NativeARSession";
@@ -62,11 +57,10 @@ export function ARProductViewer({
       <View
         style={[
           StyleSheet.absoluteFill,
-          { backgroundColor: "rgba(0,0,0,0.18)" },
+          { backgroundColor: "rgba(0,0,0,0.10)" },
         ]}
       />
 
-      {/* Top bar */}
       <View style={styles.topBar}>
         <Pressable
           style={[styles.iconBtn, { backgroundColor: "rgba(0,0,0,0.5)" }]}
@@ -80,20 +74,40 @@ export function ARProductViewer({
             {product.name}
           </Text>
         </View>
-        <View style={styles.iconBtn} />
+        <Pressable
+          style={[styles.iconBtn, { backgroundColor: "rgba(0,0,0,0.5)" }]}
+        >
+          <Feather name="info" size={18} color="#fff" />
+        </Pressable>
       </View>
 
-      {/* Bottom panel */}
       <View style={styles.bottomPanel}>
         <View
           style={[
             styles.bottomCard,
             {
-              backgroundColor: "rgba(10,10,10,0.88)",
-              borderColor: "rgba(255,255,255,0.1)",
+              backgroundColor: "rgba(10,10,10,0.92)",
+              borderColor: "rgba(255,255,255,0.08)",
             },
           ]}
         >
+          <View style={styles.productInfoRow}>
+            <View style={styles.productInfoLeft}>
+              <Text style={styles.productCategory}>{product.category}</Text>
+              <Text style={styles.productDesc} numberOfLines={1}>
+                {product.description}
+              </Text>
+            </View>
+            <View style={styles.scanBadge}>
+              <Feather name="eye" size={12} color="rgba(255,255,255,0.5)" />
+              <Text style={styles.scanCount}>
+                {product.scanCount.toLocaleString()}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.divider} />
+
           <View style={styles.swatchHeader}>
             <Text style={styles.swatchLabel}>Color variants</Text>
             <Text style={styles.selectedVariantName}>
@@ -181,6 +195,42 @@ const styles = StyleSheet.create({
     padding: 20,
     borderWidth: 1,
     gap: 14,
+  },
+  productInfoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  productInfoLeft: { flex: 1, gap: 2 },
+  productCategory: {
+    color: "#a78bfa",
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  productDesc: {
+    color: "rgba(255,255,255,0.6)",
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+  },
+  scanBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  scanCount: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
   swatchHeader: {
     flexDirection: "row",
