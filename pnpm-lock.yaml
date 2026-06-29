@@ -216,7 +216,7 @@ importers:
   artifacts/mobile:
     dependencies:
       '@reactvision/react-viro':
-        specifier: ^2.44.0
+        specifier: ^2.57.0
         version: 2.57.0(expo@54.0.35)(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       '@supabase/supabase-js':
         specifier: ^2.108.2
