@@ -12,5 +12,8 @@
   "devDependencies": {
     "prettier": "^3.8.4",
     "typescript": "~5.9.3"
+  },
+  "dependencies": {
+    "expo-dev-client": "^56.0.20"
   }
 }
