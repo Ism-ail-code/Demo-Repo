@@ -1,0 +1,5 @@
+﻿Starting project at C:\Users\hp\Documents\STARTUP\REPLIT APP OPENCODE\Native-E-commerce-App-Replit-main\Native-E-commerce-App-Replit-main\artifacts\mobile
+React Compiler enabled
+Starting Metro Bundler
+Waiting on http://localhost:8082
+Logs for your project will appear below.

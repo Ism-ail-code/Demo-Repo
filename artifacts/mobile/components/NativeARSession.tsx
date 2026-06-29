@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
 
 import {
   Viro3DObject,
@@ -11,15 +11,10 @@ import {
 } from "@reactvision/react-viro";
 
 export interface NativeARSessionProps {
-  /** GLB model URL (Android + web fallback) */
   glbUrl: string;
-  /** USDZ model URL (iOS preferred) */
   usdzUrl?: string;
-  /** Active color variant hex for material tint */
   color: string;
-  /** Fires when ARCore/ARKit initialises tracking and a surface is found */
   onAnchorFound?: () => void;
-  /** Fires when an AR tracking error occurs */
   onError?: (message: string) => void;
 }
 
@@ -31,22 +26,19 @@ interface ARSceneProps {
       position: [number, number, number];
       color: string;
       onAnchorFound?: () => void;
+      onError?: (message: string) => void;
+      onModelLoaded?: () => void;
     };
   };
 }
 
 function ARScene({ sceneNavigator }: ARSceneProps) {
-  const { glbUrl, usdzUrl, position, color, onAnchorFound } =
+  const { glbUrl, usdzUrl, position, onAnchorFound, onError, onModelLoaded } =
     sceneNavigator.viroAppProps;
 
-  const [anchorFound, setAnchorFound] = useState(false);
-
   const onPlaneDetected = useCallback(() => {
-    if (!anchorFound) {
-      setAnchorFound(true);
-      onAnchorFound?.();
-    }
-  }, [anchorFound, onAnchorFound]);
+    onAnchorFound?.();
+  }, [onAnchorFound]);
 
   const modelSource =
     Platform.OS === "ios" && usdzUrl ? { uri: usdzUrl } : { uri: glbUrl };
@@ -68,8 +60,13 @@ function ARScene({ sceneNavigator }: ARSceneProps) {
           source={modelSource}
           type={modelType}
           scale={[0.3, 0.3, 0.3]}
-          onLoadEnd={() => {}}
+          onLoadEnd={() => {
+            onModelLoaded?.();
+          }}
           onLoadStart={() => {}}
+          onError={() => {
+            onError?.("Failed to load 3D model");
+          }}
         />
       </ViroNode>
     </ViroARScene>
@@ -84,6 +81,7 @@ export function NativeARSession({
   onError,
 }: NativeARSessionProps) {
   const [isReady, setIsReady] = useState(false);
+  const [modelLoaded, setModelLoaded] = useState(false);
 
   useEffect(() => {
     if (glbUrl) {
@@ -91,31 +89,95 @@ export function NativeARSession({
     }
   }, [glbUrl]);
 
+  const handleModelLoaded = useCallback(() => {
+    setModelLoaded(true);
+  }, []);
+
   if (!isReady) {
-    return <View style={styles.loading} />;
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#fff" />
+        <Text style={styles.loadingText}>Initializing AR...</Text>
+      </View>
+    );
   }
 
   return (
-    <ViroARSceneNavigator
-      autofocus
-      initialScene={{
-        scene: ARScene,
-      }}
-      viroAppProps={{
-        glbUrl,
-        usdzUrl,
-        position: [0, 0, -1] as [number, number, number],
-        color,
-        onAnchorFound,
-      }}
-      style={StyleSheet.absoluteFill}
-    />
+    <View style={StyleSheet.absoluteFill}>
+      <ViroARSceneNavigator
+        autofocus
+        initialScene={{
+          scene: ARScene,
+        }}
+        viroAppProps={{
+          glbUrl,
+          usdzUrl,
+          position: [0, 0, -1] as [number, number, number],
+          color,
+          onAnchorFound,
+          onError,
+          onModelLoaded: handleModelLoaded,
+        }}
+        style={StyleSheet.absoluteFill}
+      />
+
+      {!modelLoaded && (
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="large" color="#fff" />
+            <Text style={styles.loadingTitle}>Loading 3D Model</Text>
+            <Text style={styles.loadingSub}>
+              {Platform.OS === "ios" ? ".usdz" : ".glb"} · Downloading assets...
+            </Text>
+            <Text style={styles.loadingHint}>
+              Point camera at a flat surface to anchor
+            </Text>
+          </View>
+        </View>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  loading: {
+  centered: {
     flex: 1,
     backgroundColor: "#000",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingText: {
+    color: "rgba(255,255,255,0.7)",
+    fontSize: 14,
+    marginTop: 12,
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.5)",
+    pointerEvents: "none",
+  },
+  loadingCard: {
+    backgroundColor: "rgba(20,20,20,0.9)",
+    borderRadius: 16,
+    padding: 28,
+    alignItems: "center",
+    gap: 12,
+    minWidth: 260,
+  },
+  loadingTitle: {
+    color: "#fff",
+    fontSize: 17,
+    fontWeight: "600",
+  },
+  loadingSub: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 13,
+  },
+  loadingHint: {
+    color: "rgba(255,255,255,0.35)",
+    fontSize: 12,
+    marginTop: 4,
   },
 });
