@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -20,12 +20,8 @@ import {
   ViroSpotLight,
 } from "@reactvision/react-viro";
 
-const MIN_SCALE = 0.2;
-const MAX_SCALE = 2.0;
-const TRANSLATE_SENSITIVITY = 0.004;
-const ROTATE_SENSITIVITY = 0.3;
-const INITIAL_SCALE = 0.3;
 const INITIAL_POSITION: [number, number, number] = [0, 0, -1];
+const INITIAL_SCALE = 0.3;
 
 ViroMaterials.createMaterials({
   productPBR: {
@@ -38,16 +34,13 @@ ViroMaterials.createMaterials({
   },
 });
 
-interface ActiveTouch {
-  id: number;
-  pageX: number;
-  pageY: number;
-}
-
 export interface NativeARSessionProps {
   glbUrl: string;
   usdzUrl?: string;
   color: string;
+  modelPosition?: [number, number, number];
+  modelScale?: number;
+  modelRotation?: [number, number, number];
   onAnchorFound?: () => void;
   onError?: (message: string) => void;
 }
@@ -158,54 +151,22 @@ function ARScene({ sceneNavigator }: ARSceneProps) {
   );
 }
 
-function angleBetweenPoints(
-  a: { pageX: number; pageY: number },
-  b: { pageX: number; pageY: number }
-): number {
-  return (
-    Math.atan2(b.pageY - a.pageY, b.pageX - a.pageX) * (180 / Math.PI)
-  );
-}
-
-function distanceBetweenPoints(
-  a: { pageX: number; pageY: number },
-  b: { pageX: number; pageY: number }
-): number {
-  const dx = b.pageX - a.pageX;
-  const dy = b.pageY - a.pageY;
-  return Math.sqrt(dx * dx + dy * dy);
-}
-
 export function NativeARSession({
   glbUrl,
   usdzUrl,
   color,
+  modelPosition: externalPosition,
+  modelScale: externalScale,
+  modelRotation: externalRotation,
   onAnchorFound,
   onError,
 }: NativeARSessionProps) {
   const [isReady, setIsReady] = useState(false);
   const [modelLoaded, setModelLoaded] = useState(false);
 
-  const modelPositionRef = useRef<[number, number, number]>([
-    ...INITIAL_POSITION,
-  ]);
-  const modelRotationRef = useRef<[number, number, number]>([0, 0, 0]);
-  const modelScaleRef = useRef(INITIAL_SCALE);
-
-  const activeTouchesRef = useRef<ActiveTouch[]>([]);
-  const pinchBaseDistRef = useRef(0);
-  const pinchBaseScaleRef = useRef(INITIAL_SCALE);
-  const rotateBaseAngleRef = useRef(0);
-  const rotateBaseYRef = useRef(0);
-  const panBasePosRef = useRef<[number, number, number]>([...INITIAL_POSITION]);
-  const panStartTouchRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-
-  const [modelPosition, setModelPosition] =
-    useState<[number, number, number]>(INITIAL_POSITION);
-  const [modelRotation, setModelRotation] = useState<[number, number, number]>([
-    0, 0, 0,
-  ]);
-  const [modelScale, setModelScale] = useState(INITIAL_SCALE);
+  const resolvedPosition = externalPosition ?? INITIAL_POSITION;
+  const resolvedScale = externalScale ?? INITIAL_SCALE;
+  const resolvedRotation = externalRotation ?? [0, 0, 0];
 
   useEffect(() => {
     if (glbUrl) {
@@ -215,109 +176,6 @@ export function NativeARSession({
 
   const handleModelLoaded = useCallback(() => {
     setModelLoaded(true);
-  }, []);
-
-  const syncPosition = useCallback((pos: [number, number, number]) => {
-    modelPositionRef.current = pos;
-    setModelPosition(pos);
-  }, []);
-
-  const syncScale = useCallback((s: number) => {
-    modelScaleRef.current = s;
-    setModelScale(s);
-  }, []);
-
-  const syncRotation = useCallback((r: [number, number, number]) => {
-    modelRotationRef.current = r;
-    setModelRotation(r);
-  }, []);
-
-  const handleTouchStart = useCallback(
-    (e: any) => {
-      const nativeTouches: any[] = e.nativeEvent.touches || [];
-      if (nativeTouches.length === 0) return;
-
-      activeTouchesRef.current = nativeTouches.map((t: any) => ({
-        id: t.identifier ?? t.pageX,
-        pageX: t.pageX,
-        pageY: t.pageY,
-      }));
-
-      const count = activeTouchesRef.current.length;
-
-      if (count === 1) {
-        panBasePosRef.current = [...modelPositionRef.current];
-        panStartTouchRef.current = {
-          x: nativeTouches[0].pageX,
-          y: nativeTouches[0].pageY,
-        };
-      } else if (count >= 2) {
-        const t1 = activeTouchesRef.current[0];
-        const t2 = activeTouchesRef.current[1];
-        pinchBaseDistRef.current = distanceBetweenPoints(t1, t2);
-        pinchBaseScaleRef.current = modelScaleRef.current;
-        rotateBaseAngleRef.current = angleBetweenPoints(t1, t2);
-        rotateBaseYRef.current = modelRotationRef.current[1];
-      }
-    },
-    []
-  );
-
-  const handleTouchMove = useCallback(
-    (e: any) => {
-      const nativeTouches: any[] = e.nativeEvent.touches || [];
-      if (nativeTouches.length === 0) return;
-
-      activeTouchesRef.current = nativeTouches.map((t: any) => ({
-        id: t.identifier ?? t.pageX,
-        pageX: t.pageX,
-        pageY: t.pageY,
-      }));
-
-      const count = activeTouchesRef.current.length;
-
-      if (count === 1) {
-        const t = nativeTouches[0];
-        const base = panBasePosRef.current;
-        const startX = panStartTouchRef.current.x;
-        const startY = panStartTouchRef.current.y;
-        const dx = t.pageX - startX;
-        const dy = t.pageY - startY;
-        const newPos: [number, number, number] = [
-          base[0] + dx * TRANSLATE_SENSITIVITY,
-          base[1],
-          base[2] + dy * TRANSLATE_SENSITIVITY,
-        ];
-        syncPosition(newPos);
-      } else if (count >= 2) {
-        const t1 = nativeTouches[0];
-        const t2 = nativeTouches[1];
-        const currentDist = distanceBetweenPoints(t1, t2);
-        const currentAngle = angleBetweenPoints(t1, t2);
-
-        if (pinchBaseDistRef.current > 0) {
-          const ratio = currentDist / pinchBaseDistRef.current;
-          const newScale = Math.max(
-            MIN_SCALE,
-            Math.min(MAX_SCALE, pinchBaseScaleRef.current * ratio)
-          );
-          syncScale(newScale);
-        }
-
-        if (pinchBaseDistRef.current > 0) {
-          let angleDelta = currentAngle - rotateBaseAngleRef.current;
-          if (angleDelta > 180) angleDelta -= 360;
-          if (angleDelta < -180) angleDelta += 360;
-          const newY = rotateBaseYRef.current + angleDelta;
-          syncRotation([0, newY, 0]);
-        }
-      }
-    },
-    [syncPosition, syncScale, syncRotation]
-  );
-
-  const handleTouchEnd = useCallback(() => {
-    activeTouchesRef.current = [];
   }, []);
 
   if (!isReady) {
@@ -333,13 +191,13 @@ export function NativeARSession({
     <View style={StyleSheet.absoluteFill}>
       <ViroARSceneNavigator
         autofocus
-        initialScene={{ scene: ARScene }}
+        initialScene={{ scene: ARScene as any }}
         viroAppProps={{
           glbUrl,
           usdzUrl,
-          modelPosition,
-          modelScale,
-          modelRotation,
+          modelPosition: resolvedPosition,
+          modelScale: resolvedScale,
+          modelRotation: resolvedRotation as [number, number, number],
           onAnchorFound,
           onError,
           onModelLoaded: handleModelLoaded,
@@ -350,14 +208,6 @@ export function NativeARSession({
         shadowsEnabled={true}
         multisamplingEnabled={true}
         style={StyleSheet.absoluteFill}
-      />
-
-      <View
-        style={StyleSheet.absoluteFill}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onTouchCancel={handleTouchEnd}
       />
 
       {!modelLoaded && (
@@ -379,15 +229,15 @@ export function NativeARSession({
         <View style={styles.gestureHintContainer}>
           <View style={styles.gestureHintRow}>
             <View style={styles.gesturePill}>
-              <Text style={styles.gestureIcon}>{`\u2194`}</Text>
+              <Text style={styles.gestureIcon}>{"↔"}</Text>
               <Text style={styles.gestureLabel}>Drag</Text>
             </View>
             <View style={styles.gesturePill}>
-              <Text style={styles.gestureIcon}>{`\u2195`}</Text>
+              <Text style={styles.gestureIcon}>{"↕"}</Text>
               <Text style={styles.gestureLabel}>Pinch</Text>
             </View>
             <View style={styles.gesturePill}>
-              <Text style={styles.gestureIcon}>{`\u21BB`}</Text>
+              <Text style={styles.gestureIcon}>{"↻"}</Text>
               <Text style={styles.gestureLabel}>Twist</Text>
             </View>
           </View>
