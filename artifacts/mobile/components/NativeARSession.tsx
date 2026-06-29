@@ -20,15 +20,18 @@ import {
   ViroSpotLight,
 } from "@reactvision/react-viro";
 
-const INITIAL_POSITION: [number, number, number] = [0, 0, -1];
-const INITIAL_SCALE = 0.3;
+// Instant placement — 2.0 m in front of camera at lower-eye level.
+// No floor-plane detection required; model appears the moment the asset loads.
+const INITIAL_POSITION: [number, number, number] = [0, -0.5, -2.0];
+const INITIAL_SCALE = 0.5;
 
+// Seed the base material; will be updated per color change below.
 ViroMaterials.createMaterials({
   productPBR: {
     lightingModel: "PBR",
+    diffuseColor: "#ffffff",
     roughness: 0.4,
-    metalness: 0.1,
-    diffuseIntensity: 1.0,
+    metalness: 0.3,
     writesToDepthBuffer: true,
     readsFromDepthBuffer: true,
   },
@@ -89,15 +92,16 @@ function ARScene({ sceneNavigator }: ARSceneProps) {
         onLoadEnd={() => {}}
       />
 
-      <ViroAmbientLight color="#ffffff" intensity={200} />
+      <ViroAmbientLight color="#ffffff" intensity={250} />
 
+      {/* Key directional — HD shadow map with 4096 resolution */}
       <ViroDirectionalLight
         color="#ffffff"
-        intensity={600}
+        intensity={650}
         direction={[0, -1, -1]}
         castsShadow
         shadowOpacity={0.65}
-        shadowMapSize={2048}
+        shadowMapSize={4096}
         shadowOrthographicSize={5}
         shadowOrthographicPosition={[0, 5, 0]}
         shadowNearZ={1}
@@ -116,7 +120,7 @@ function ARScene({ sceneNavigator }: ARSceneProps) {
         outerAngle={60}
         castsShadow
         shadowOpacity={0.5}
-        shadowMapSize={1024}
+        shadowMapSize={2048}
       />
 
       <ViroOmniLight
@@ -168,11 +172,28 @@ export function NativeARSession({
   const resolvedScale = externalScale ?? INITIAL_SCALE;
   const resolvedRotation = externalRotation ?? [0, 0, 0];
 
+  // Instant placement: mark ready the moment a URL is present — no surface scan needed.
   useEffect(() => {
     if (glbUrl) {
       setIsReady(true);
     }
   }, [glbUrl]);
+
+  // Apply color variant to the PBR material directly on the GPU — no re-download.
+  // Recreate the material with the new baseColorFactor whenever the color prop changes.
+  useEffect(() => {
+    if (!color) return;
+    ViroMaterials.createMaterials({
+      productPBR: {
+        lightingModel: "PBR",
+        diffuseColor: color,
+        roughness: 0.4,
+        metalness: 0.3,
+        writesToDepthBuffer: true,
+        readsFromDepthBuffer: true,
+      },
+    });
+  }, [color]);
 
   const handleModelLoaded = useCallback(() => {
     setModelLoaded(true);
@@ -188,7 +209,9 @@ export function NativeARSession({
   }
 
   return (
-    <View style={StyleSheet.absoluteFill}>
+    // box-none: this view does NOT consume touches — gestures pass through to the
+    // PanResponder layer in ARProductViewer sitting above this in the z-stack.
+    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       <ViroARSceneNavigator
         autofocus
         initialScene={{ scene: ARScene as any }}
@@ -206,27 +229,25 @@ export function NativeARSession({
         pbrEnabled={true}
         bloomEnabled={true}
         shadowsEnabled={true}
+        // multisamplingEnabled enables hardware MSAA anti-aliasing — eliminates jagged edges
         multisamplingEnabled={true}
         style={StyleSheet.absoluteFill}
       />
 
       {!modelLoaded && (
-        <View style={styles.loadingOverlay}>
+        <View style={styles.loadingOverlay} pointerEvents="none">
           <View style={styles.glassCard}>
             <ActivityIndicator size="large" color="#fff" />
             <Text style={styles.loadingTitle}>Loading 3D Model</Text>
             <Text style={styles.loadingSub}>
-              {Platform.OS === "ios" ? ".usdz" : ".glb"} · Downloading assets...
-            </Text>
-            <Text style={styles.loadingHint}>
-              Point camera at a flat surface to anchor
+              {Platform.OS === "ios" ? ".usdz" : ".glb"} · Streaming asset...
             </Text>
           </View>
         </View>
       )}
 
       {modelLoaded && (
-        <View style={styles.gestureHintContainer}>
+        <View style={styles.gestureHintContainer} pointerEvents="none">
           <View style={styles.gestureHintRow}>
             <View style={styles.gesturePill}>
               <Text style={styles.gestureIcon}>{"↔"}</Text>
@@ -264,7 +285,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(0,0,0,0.5)",
-    pointerEvents: "none",
   },
   glassCard: {
     backgroundColor: "rgba(20,20,20,0.85)",
@@ -285,18 +305,12 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.5)",
     fontSize: 13,
   },
-  loadingHint: {
-    color: "rgba(255,255,255,0.35)",
-    fontSize: 12,
-    marginTop: 4,
-  },
   gestureHintContainer: {
     position: "absolute",
     bottom: 180,
     left: 0,
     right: 0,
     alignItems: "center",
-    pointerEvents: "none",
   },
   gestureHintRow: {
     flexDirection: "row",

@@ -1,0 +1,27 @@
+# CRITICAL SYSTEM OVERHAUL: IMPLEMENT INSTANT GESTURE AR & REMOVE ALL INTERACTION LOCKS
+
+We must completely resolve our mobile viewport interaction deadlock and graphics rendering issues in a single automated pass. The 3D product mesh is currently rendering as a stiff, frozen, low-resolution layer floating in space that completely ignores multi-touch gestures, pinches, and drags. 
+
+Please systematically rewrite our primary 3D rendering canvas viewport (`src/components/ARProductViewer.tsx` or our core camera view wrapper) and configuration nodes. Output 100% complete files with zero placeholder code stubs.
+
+## 1. Unblock Screen Touch Transmissions (The Pointer Fix)
+- Locate the root layout containers wrapping our phone camera stream and the 3D rendering canvas layers.
+- Force-inject the layout property **`pointerEvents="box-none"`** onto the outer parent containers and native camera view wrapper grids.
+- Set the inner 3D canvas viewport container explicitly to **`pointerEvents="auto"`**. This clears away invisible layout boundaries, telling the mobile OS to pass finger interaction metrics directly through the background and onto the 3D model.
+- Wrap the main application render return block cleanly inside a `<GestureHandlerRootView style={{ flex: 1 }}>` container so the device OS listens for complex touch events instantly.
+
+## 2. Deploy Responsive Multi-Touch Gesture Physics
+- Bind an active, responsive `PanResponder` input tracking array straight to the 3D model's state variables:
+  - **One-Finger Translation (Drag)**: Map horizontal finger delta adjustments directly to move the 3D asset smoothly across the horizontal X and Z plane space parameters so shoppers can reposition items anywhere in their room.
+  - **Two-Finger Pinch-to-Zoom (Scale)**: Calculate the distance ratio changes between dual-touch contacts during pinch events. Smoothly modify the asset scale property. Clamp the scaling metrics strictly between `0.2` (minimum) and `2.0` (maximum) to prevent models from vanishing or breaking.
+  - **Two-Finger Twist-to-Rotate (Spin)**: Track the angular variation deltas during a two-finger twisting motion to dynamically spin the 3D product mesh smoothly on its vertical Y-axis for a full 360-degree inspection.
+
+## 3. Activate Instant Screen-Space Placement & HD Rendering Quality
+- **Instant Load**: Do NOT lock the asset behind strict physical floor plane detection tracking if a user is in a low-light room. The millisecond the `.glb` or `.usdz` asset finishes streaming from our live Supabase bucket (`tcujcbwkginjfqworinz.supabase.co`), instantly project the model 2.0 meters directly in front of the camera lens orientation vector at lower-eye level.
+- **HD Rendering Pipeline**: Enable hardware Anti-Aliasing (`true`) inside the GL rendering canvas context initialization code to eliminate jagged edge mesh lines. Maximize anisotropic texture filtering parameters to sharpen fine details on product materials, fabrics, and metallic finishes.
+
+## 4. Retain Live Database Connection Bindings
+- Preserve all existing Supabase Client initialization hooks, AsyncStorage local cache structures, and data routing channels reading from our tables (`products`, `assets`, `product_variants`). 
+- Tapping our color variant swatch tray must continue to apply color factor swaps (`pbrMetallicRoughness.baseColorFactor`) directly on the phone's GPU in real-time without breaking the touch gesture states and without triggering a network re-download.
+
+Execute these structural layout overrides, touch physics bindings, and HD rendering adjustments in a single integrated compilation pass.

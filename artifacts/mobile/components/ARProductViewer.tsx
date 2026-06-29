@@ -26,8 +26,9 @@ interface ARProductViewerProps {
 const MIN_SCALE = 0.2;
 const MAX_SCALE = 2.0;
 const TRANSLATE_SENSITIVITY = 0.004;
-const INITIAL_POSITION: [number, number, number] = [0, 0, -1];
-const INITIAL_SCALE = 0.3;
+// Place model 2m in front of camera at lower-eye level — no floor detection required
+const INITIAL_POSITION: [number, number, number] = [0, -0.5, -2.0];
+const INITIAL_SCALE = 0.5;
 const INITIAL_ROTATION: [number, number, number] = [0, 0, 0];
 
 function distance(
@@ -79,8 +80,39 @@ export function ARProductViewer({
   const panStartRef = useRef({ x: 0, y: 0 });
   const pinchBaseDistRef = useRef(0);
   const pinchBaseScaleRef = useRef(INITIAL_SCALE);
-  const rotateBaseAngleRef = useRef(0);
+  const rotateBaseAngleRef = useRef<number | null>(null); // null = not yet baselined
   const rotateBaseYRef = useRef(0);
+  const prevTouchCountRef = useRef(0);
+
+  // Re-baseline all active-mode refs for the given touch set.
+  // Called both on grant and whenever touch count changes mid-gesture.
+  const rebaseline = useCallback(
+    (touches: { pageX: number; pageY: number }[]) => {
+      const currentPos = gestureStateRef.current.position;
+      const currentScale = gestureStateRef.current.scale;
+      const currentRot = gestureStateRef.current.rotation;
+
+      if (touches.length === 1) {
+        panBaseRef.current = [...currentPos];
+        panStartRef.current = { x: touches[0].pageX, y: touches[0].pageY };
+        // Invalidate two-finger baselines so stale data isn't used
+        pinchBaseDistRef.current = 0;
+        rotateBaseAngleRef.current = null;
+      } else if (touches.length >= 2) {
+        const t1 = touches[0];
+        const t2 = touches[1];
+        pinchBaseDistRef.current = distance(t1, t2);
+        pinchBaseScaleRef.current = currentScale;
+        rotateBaseAngleRef.current = angle(t1, t2);
+        rotateBaseYRef.current = currentRot[1];
+        // Invalidate one-finger baseline so stale drag data isn't used
+        panBaseRef.current = [...currentPos];
+        panStartRef.current = { x: t1.pageX, y: t1.pageY };
+      }
+      prevTouchCountRef.current = touches.length;
+    },
+    []
+  );
 
   const panResponder = useRef(
     PanResponder.create({
@@ -91,30 +123,18 @@ export function ARProductViewer({
       onPanResponderGrant: (evt) => {
         const touches = evt.nativeEvent.touches;
         if (!touches || touches.length === 0) return;
-
-        const currentPos = gestureStateRef.current.position;
-        const currentScale = gestureStateRef.current.scale;
-        const currentRot = gestureStateRef.current.rotation;
-
-        if (touches.length === 1) {
-          panBaseRef.current = [...currentPos];
-          panStartRef.current = {
-            x: touches[0].pageX,
-            y: touches[0].pageY,
-          };
-        } else if (touches.length >= 2) {
-          const t1 = touches[0];
-          const t2 = touches[1];
-          pinchBaseDistRef.current = distance(t1, t2);
-          pinchBaseScaleRef.current = currentScale;
-          rotateBaseAngleRef.current = angle(t1, t2);
-          rotateBaseYRef.current = currentRot[1];
-        }
+        rebaseline(touches);
       },
 
       onPanResponderMove: (evt) => {
         const touches = evt.nativeEvent.touches;
         if (!touches || touches.length === 0) return;
+
+        // Re-baseline when touch count changes (e.g. 1→2 or 2→1) mid-gesture
+        if (touches.length !== prevTouchCountRef.current) {
+          rebaseline(touches);
+          return; // skip this frame — apply delta from the next event onward
+        }
 
         if (touches.length === 1) {
           const t = touches[0];
@@ -133,6 +153,7 @@ export function ARProductViewer({
           const currentDist = distance(t1, t2);
           const currentAngle = angle(t1, t2);
 
+          // Pinch-to-zoom — only apply when baseline is valid
           if (pinchBaseDistRef.current > 0) {
             const ratio = currentDist / pinchBaseDistRef.current;
             const newScale = Math.max(
@@ -142,16 +163,27 @@ export function ARProductViewer({
             setModelScale(newScale);
           }
 
-          let angleDelta = currentAngle - rotateBaseAngleRef.current;
-          if (angleDelta > 180) angleDelta -= 360;
-          if (angleDelta < -180) angleDelta += 360;
-          const newY = rotateBaseYRef.current + angleDelta;
-          setModelRotation([0, newY, 0]);
+          // Twist-to-rotate — only apply when rotation baseline is initialized
+          if (rotateBaseAngleRef.current !== null) {
+            let angleDelta = currentAngle - rotateBaseAngleRef.current;
+            if (angleDelta > 180) angleDelta -= 360;
+            if (angleDelta < -180) angleDelta += 360;
+            const newY = rotateBaseYRef.current + angleDelta;
+            setModelRotation([0, newY, 0]);
+          }
         }
       },
 
-      onPanResponderRelease: () => {},
-      onPanResponderTerminate: () => {},
+      onPanResponderRelease: () => {
+        prevTouchCountRef.current = 0;
+        rotateBaseAngleRef.current = null;
+        pinchBaseDistRef.current = 0;
+      },
+      onPanResponderTerminate: () => {
+        prevTouchCountRef.current = 0;
+        rotateBaseAngleRef.current = null;
+        pinchBaseDistRef.current = 0;
+      },
     })
   ).current;
 
@@ -188,8 +220,10 @@ export function ARProductViewer({
           />
         </View>
 
+        {/* Gesture capture layer — explicit auto so all touch events reach PanResponder */}
         <View
           style={StyleSheet.absoluteFill}
+          pointerEvents="auto"
           {...panResponder.panHandlers}
         />
 
