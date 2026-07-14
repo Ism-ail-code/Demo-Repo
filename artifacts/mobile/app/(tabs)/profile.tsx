@@ -80,14 +80,15 @@ function SettingRow({
 export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { user, logout } = useAuth();
+  const { user, profileRole, logout } = useAuth();
   const { recentProducts, clearRecent } = useRecentlyViewed();
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const isMerchant = user && profileRole === "merchant_owner";
 
   const handleMerchantPortal = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (user) {
+    if (isMerchant) {
       router.push("/merchant/dashboard");
     } else {
       router.push("/merchant/login");
@@ -95,13 +96,13 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert("Sign Out", "Sign out of the merchant portal?", [
+    Alert.alert("Sign Out", "Sign out of your account?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Sign Out",
         style: "destructive",
-        onPress: () => {
-          logout();
+        onPress: async () => {
+          await logout();
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         },
       },
@@ -120,6 +121,9 @@ export default function ProfileScreen() {
       },
     ]);
   };
+
+  const roleLabel = isMerchant ? "Merchant Owner" : "AR Shopper";
+  const roleBadgeColor = isMerchant ? "#a78bfa" : colors.mutedForeground;
 
   return (
     <ScrollView
@@ -164,8 +168,8 @@ export default function ProfileScreen() {
               {user.email}
             </Text>
             <View style={styles.userBadge}>
-              <View style={[styles.roleDot, { backgroundColor: colors.accent }]} />
-              <Text style={styles.roleText}>{user.merchantSlug}</Text>
+              <View style={[styles.roleDot, { backgroundColor: roleBadgeColor }]} />
+              <Text style={styles.roleText}>{roleLabel}</Text>
             </View>
           </View>
         </View>
@@ -197,15 +201,37 @@ export default function ProfileScreen() {
 
       <View style={styles.section}>
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>
-          Merchant
+          {isMerchant ? "Merchant Workspace" : "Merchant"}
         </Text>
         <View style={[styles.group, { borderRadius: colors.radius }]}>
-          <SettingRow
-            icon="briefcase"
-            label={user ? "Merchant Dashboard" : "Merchant Portal"}
-            onPress={handleMerchantPortal}
-            accent
-          />
+          {isMerchant ? (
+            <>
+              <SettingRow
+                icon="layout"
+                label="Management Console"
+                onPress={handleMerchantPortal}
+                accent
+              />
+              <SettingRow
+                icon="box"
+                label="Inventory Sync"
+                value="Live"
+                onPress={handleMerchantPortal}
+              />
+              <SettingRow
+                icon="camera"
+                label="3D Asset Capture"
+                onPress={handleMerchantPortal}
+              />
+            </>
+          ) : (
+            <SettingRow
+              icon="briefcase"
+              label="Merchant Portal"
+              onPress={handleMerchantPortal}
+              accent
+            />
+          )}
           {user && (
             <SettingRow
               icon="log-out"

@@ -7,15 +7,15 @@ import {
 } from "@expo-google-fonts/inter";
 import { setBaseUrl } from "@workspace/api-client-react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { router, Stack, useRootNavigationState } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { AuthProvider } from "@/context/AuthContext";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { RecentlyViewedProvider } from "@/context/RecentlyViewedContext";
 
 setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
@@ -24,16 +24,41 @@ SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
+function RoleRouter() {
+  const { user, profileRole, isAuthLoading } = useAuth();
+  const navState = useRootNavigationState();
+  const hasRedirected = useRef(false);
+
+  useEffect(() => {
+    if (isAuthLoading || !navState?.routes) return;
+    if (hasRedirected.current) return;
+
+    if (user && profileRole === "merchant_owner") {
+      hasRedirected.current = true;
+      router.replace("/merchant/dashboard");
+    }
+  }, [user, profileRole, isAuthLoading, navState]);
+
+  return null;
+}
+
 function RootLayoutNav() {
   return (
-    <Stack screenOptions={{ headerBackTitle: "Back" }}>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen
-        name="viewer"
-        options={{ presentation: "fullScreenModal", headerShown: false, animation: "slide_from_bottom" }}
-      />
-      <Stack.Screen name="merchant" options={{ headerShown: false }} />
-    </Stack>
+    <>
+      <RoleRouter />
+      <Stack screenOptions={{ headerBackTitle: "Back" }}>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="viewer"
+          options={{
+            presentation: "fullScreenModal",
+            headerShown: false,
+            animation: "slide_from_bottom",
+          }}
+        />
+        <Stack.Screen name="merchant" options={{ headerShown: false }} />
+      </Stack>
+    </>
   );
 }
 

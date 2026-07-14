@@ -69,17 +69,19 @@ function BarChart({ data }: { data: number[] }) {
 export default function DashboardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { user, logout } = useAuth();
+  const { user, profileRole, isAuthLoading, logout } = useAuth();
   const [scanData] = useState([420, 380, 510, 620, 490, 710, 843]);
 
   useEffect(() => {
-    if (!user) router.replace("/merchant/login");
-  }, [user]);
+    if (!isAuthLoading && (!user || profileRole !== "merchant_owner")) {
+      router.replace("/merchant/login");
+    }
+  }, [user, profileRole, isAuthLoading]);
 
-  if (!user) return null;
+  if (!user || profileRole !== "merchant_owner") return null;
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     router.replace("/(tabs)/profile");
   };
 
@@ -105,7 +107,7 @@ export default function DashboardScreen() {
           <Text style={styles.welcomeName}>{user.name}</Text>
           <View style={styles.merchantRow}>
             <View style={[styles.merchantDot, { backgroundColor: colors.accent }]} />
-            <Text style={styles.merchantSlug}>{user.merchantSlug}</Text>
+            <Text style={styles.merchantSlug}>{user.email}</Text>
           </View>
         </View>
         <Pressable onPress={handleLogout} style={styles.logoutBtn}>

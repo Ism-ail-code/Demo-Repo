@@ -2,12 +2,13 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useRef } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   Animated,
   FlatList,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,6 +16,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useAuth } from "@/context/AuthContext";
 import { ProductCard } from "@/components/ProductCard";
 import { ProductCardSkeleton } from "@/components/ShimmerCard";
 import { useTrendingProducts } from "@/hooks/useProducts";
@@ -147,10 +149,19 @@ function SectionHeader({
 export default function DiscoveryHub() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { user, profileRole } = useAuth();
   const { recentProducts } = useRecentlyViewed();
-  const { data: trending, isLoading: trendingLoading } = useTrendingProducts(8);
+  const { data: trending, isLoading: trendingLoading, refetchProducts } = useTrendingProducts(8);
+  const [refreshing, setRefreshing] = useState(false);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await refetchProducts();
+    setRefreshing(false);
+  }, [refetchProducts]);
 
   const handleQRScan = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -165,6 +176,14 @@ export default function DiscoveryHub() {
           { paddingTop: topPad + 8 },
         ]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.foreground}
+            colors={[colors.accent]}
+          />
+        }
       >
         {/* Header */}
         <View style={styles.header}>
@@ -179,7 +198,13 @@ export default function DiscoveryHub() {
             </Text>
           </View>
           <Pressable
-            onPress={() => router.push("/merchant/login")}
+            onPress={() => {
+              if (user && profileRole === "merchant_owner") {
+                router.push("/merchant/dashboard");
+              } else {
+                router.push("/merchant/login");
+              }
+            }}
             style={[
               styles.headerBtn,
               { backgroundColor: colors.secondary },

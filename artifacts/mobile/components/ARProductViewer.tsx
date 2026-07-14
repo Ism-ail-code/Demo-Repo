@@ -3,6 +3,8 @@ import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Animated,
+  Dimensions,
   PanResponder,
   Pressable,
   StyleSheet,
@@ -23,14 +25,22 @@ interface ARProductViewerProps {
   onBuyNow?: () => void;
 }
 
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+
 const MIN_SCALE = 0.2;
 const MAX_SCALE = 2.0;
 const TRANSLATE_SENSITIVITY = 0.004;
+const DIAL_SENSITIVITY = 0.35;
+const LATCH_HOLD_MS = 200;
+const MOVE_DEADZONE = 8;
+const DIAL_ZONE_RATIO = 0.35;
+const SMOOTHING = 0.12;
+
 const INITIAL_POSITION: [number, number, number] = [0, 0, -1];
 const INITIAL_SCALE = 0.3;
 const INITIAL_ROTATION: [number, number, number] = [0, 0, 0];
 
-function distance(
+function touchDistance(
   a: { pageX: number; pageY: number },
   b: { pageX: number; pageY: number }
 ) {
@@ -39,12 +49,15 @@ function distance(
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-function angle(
+function touchAngle(
   a: { pageX: number; pageY: number },
   b: { pageX: number; pageY: number }
 ) {
   return Math.atan2(b.pageY - a.pageY, b.pageX - a.pageX) * (180 / Math.PI);
 }
+
+const TEST_GLB_URL =
+  "https://okoloionftfxyvscfvhh.supabase.co/storage/v1/object/public/models/pixellabs-treasure-chest-4062.glb";
 
 export function ARProductViewer({
   product,
@@ -62,25 +75,76 @@ export function ARProductViewer({
   const [modelScale, setModelScale] = useState(INITIAL_SCALE);
   const [modelRotation, setModelRotation] =
     useState<[number, number, number]>(INITIAL_ROTATION);
+  const [isLatched, setIsLatched] = useState(false);
+
+  const dialOpacity = useRef(new Animated.Value(0.3)).current;
+  const latchIndicatorOpacity = useRef(new Animated.Value(0)).current;
+  const dialAnimRef = useRef<Animated.CompositeAnimation | null>(null);
 
   const gestureStateRef = useRef({
-    position: INITIAL_POSITION,
+    position: [...INITIAL_POSITION] as [number, number, number],
     scale: INITIAL_SCALE,
-    rotation: INITIAL_ROTATION,
+    rotation: [...INITIAL_ROTATION] as [number, number, number],
   });
 
   useEffect(() => {
-    gestureStateRef.current.position = modelPosition;
+    gestureStateRef.current.position = [...modelPosition];
     gestureStateRef.current.scale = modelScale;
-    gestureStateRef.current.rotation = modelRotation;
+    gestureStateRef.current.rotation = [...modelRotation];
   }, [modelPosition, modelScale, modelRotation]);
 
-  const panBaseRef = useRef<[number, number, number]>(INITIAL_POSITION);
-  const panStartRef = useRef({ x: 0, y: 0 });
+  const panBaseRef = useRef<[number, number, number]>([...INITIAL_POSITION]);
   const pinchBaseDistRef = useRef(0);
   const pinchBaseScaleRef = useRef(INITIAL_SCALE);
   const rotateBaseAngleRef = useRef(0);
   const rotateBaseYRef = useRef(0);
+
+  const gestureModeRef = useRef<
+    "idle" | "pan" | "dial" | "latch" | "pinch"
+  >("idle");
+  const latchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (latchTimerRef.current) clearTimeout(latchTimerRef.current);
+      if (dialAnimRef.current) dialAnimRef.current.stop();
+    };
+  }, []);
+
+  useEffect(() => {
+    Animated.timing(latchIndicatorOpacity, {
+      toValue: isLatched ? 1 : 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, [isLatched, latchIndicatorOpacity]);
+
+  const startDialPulse = useCallback(() => {
+    if (dialAnimRef.current) dialAnimRef.current.stop();
+    dialAnimRef.current = Animated.loop(
+      Animated.sequence([
+        Animated.timing(dialOpacity, {
+          toValue: 0.6,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+        Animated.timing(dialOpacity, {
+          toValue: 0.3,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    dialAnimRef.current.start();
+  }, [dialOpacity]);
+
+  const stopDialPulse = useCallback(() => {
+    if (dialAnimRef.current) {
+      dialAnimRef.current.stop();
+      dialAnimRef.current = null;
+    }
+    dialOpacity.setValue(0.3);
+  }, [dialOpacity]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -89,71 +153,184 @@ export function ARProductViewer({
       onPanResponderTerminationRequest: () => false,
 
       onPanResponderGrant: (evt) => {
-        const touches = evt.nativeEvent.touches;
-        if (!touches || touches.length === 0) return;
+        const touchCount = evt.nativeEvent.touches.length;
+        if (touchCount === 0) return;
 
-        const currentPos = gestureStateRef.current.position;
-        const currentScale = gestureStateRef.current.scale;
-        const currentRot = gestureStateRef.current.rotation;
+        if (touchCount === 1) {
+          const touch = evt.nativeEvent.touches[0];
+          const touchY = touch.pageY;
+          const dialThreshold = SCREEN_HEIGHT * (1 - DIAL_ZONE_RATIO);
 
-        if (touches.length === 1) {
-          panBaseRef.current = [...currentPos];
-          panStartRef.current = {
-            x: touches[0].pageX,
-            y: touches[0].pageY,
-          };
-        } else if (touches.length >= 2) {
-          const t1 = touches[0];
-          const t2 = touches[1];
-          pinchBaseDistRef.current = distance(t1, t2);
-          pinchBaseScaleRef.current = currentScale;
-          rotateBaseAngleRef.current = angle(t1, t2);
-          rotateBaseYRef.current = currentRot[1];
+          panBaseRef.current = [...gestureStateRef.current.position];
+
+          if (gestureModeRef.current === "pinch") {
+            gestureModeRef.current = "idle";
+          }
+
+          if (touchY >= dialThreshold) {
+            gestureModeRef.current = "dial";
+            startDialPulse();
+          } else {
+            gestureModeRef.current = "idle";
+
+            if (latchTimerRef.current) clearTimeout(latchTimerRef.current);
+            latchTimerRef.current = setTimeout(() => {
+              if (gestureModeRef.current === "idle") {
+                gestureModeRef.current = "latch";
+                setIsLatched(true);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              }
+            }, LATCH_HOLD_MS);
+          }
+        } else if (touchCount >= 2) {
+          if (latchTimerRef.current) clearTimeout(latchTimerRef.current);
+          gestureModeRef.current = "pinch";
+          setIsLatched(false);
+
+          const t1 = evt.nativeEvent.touches[0];
+          const t2 = evt.nativeEvent.touches[1];
+          pinchBaseDistRef.current = touchDistance(t1, t2);
+          pinchBaseScaleRef.current = gestureStateRef.current.scale;
+          rotateBaseAngleRef.current = touchAngle(t1, t2);
+          rotateBaseYRef.current = gestureStateRef.current.rotation[1];
         }
       },
 
-      onPanResponderMove: (evt) => {
-        const touches = evt.nativeEvent.touches;
-        if (!touches || touches.length === 0) return;
+      onPanResponderMove: (evt, gestureState) => {
+        const activeTouches = gestureState.numberActiveTouches;
 
-        if (touches.length === 1) {
-          const t = touches[0];
-          const base = panBaseRef.current;
-          const dx = t.pageX - panStartRef.current.x;
-          const dy = t.pageY - panStartRef.current.y;
-          const newPos: [number, number, number] = [
-            base[0] + dx * TRANSLATE_SENSITIVITY,
-            base[1],
-            base[2] + dy * TRANSLATE_SENSITIVITY,
-          ];
-          setModelPosition(newPos);
-        } else if (touches.length >= 2) {
-          const t1 = touches[0];
-          const t2 = touches[1];
-          const currentDist = distance(t1, t2);
-          const currentAngle = angle(t1, t2);
+        if (activeTouches === 2) {
+          if (gestureModeRef.current !== "pinch") {
+            gestureModeRef.current = "pinch";
+            if (latchTimerRef.current) clearTimeout(latchTimerRef.current);
+            const t1 = evt.nativeEvent.touches[0];
+            const t2 = evt.nativeEvent.touches[1];
+            if (t1 && t2) {
+              pinchBaseDistRef.current = touchDistance(t1, t2);
+              pinchBaseScaleRef.current = gestureStateRef.current.scale;
+              rotateBaseAngleRef.current = touchAngle(t1, t2);
+              rotateBaseYRef.current = gestureStateRef.current.rotation[1];
+            }
+          }
 
+          const t1 = evt.nativeEvent.touches[0];
+          const t2 = evt.nativeEvent.touches[1];
+          if (!t1 || !t2) return;
+
+          const currentDist = touchDistance(t1, t2);
           if (pinchBaseDistRef.current > 0) {
             const ratio = currentDist / pinchBaseDistRef.current;
             const newScale = Math.max(
               MIN_SCALE,
               Math.min(MAX_SCALE, pinchBaseScaleRef.current * ratio)
             );
+            gestureStateRef.current.scale = newScale;
             setModelScale(newScale);
           }
 
+          const currentAngle = touchAngle(t1, t2);
           let angleDelta = currentAngle - rotateBaseAngleRef.current;
           if (angleDelta > 180) angleDelta -= 360;
           if (angleDelta < -180) angleDelta += 360;
           const newY = rotateBaseYRef.current + angleDelta;
+          gestureStateRef.current.rotation = [0, newY, 0];
           setModelRotation([0, newY, 0]);
+          return;
+        }
+
+        if (activeTouches !== 1) return;
+
+        if (gestureModeRef.current === "pinch") {
+          gestureModeRef.current = "idle";
+          panBaseRef.current = [...gestureStateRef.current.position];
+          if (latchTimerRef.current) clearTimeout(latchTimerRef.current);
+          latchTimerRef.current = setTimeout(() => {
+            if (gestureModeRef.current === "idle") {
+              gestureModeRef.current = "latch";
+              setIsLatched(true);
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            }
+          }, LATCH_HOLD_MS);
+          return;
+        }
+
+        if (gestureModeRef.current === "dial") {
+          const rotationDelta = gestureState.dx * DIAL_SENSITIVITY;
+          const currentRotY = gestureStateRef.current.rotation[1];
+          const newY = currentRotY + rotationDelta;
+          gestureStateRef.current.rotation = [0, newY, 0];
+          setModelRotation([0, newY, 0]);
+          return;
+        }
+
+        if (gestureModeRef.current === "latch") {
+          return;
+        }
+
+        if (gestureModeRef.current === "idle") {
+          const moveDist = Math.sqrt(
+            gestureState.dx * gestureState.dx +
+              gestureState.dy * gestureState.dy
+          );
+          if (moveDist > MOVE_DEADZONE) {
+            if (latchTimerRef.current) clearTimeout(latchTimerRef.current);
+
+            const touch = evt.nativeEvent.touches[0];
+            if (touch) {
+              const dialThreshold =
+                SCREEN_HEIGHT * (1 - DIAL_ZONE_RATIO);
+              if (touch.pageY >= dialThreshold) {
+                gestureModeRef.current = "dial";
+                startDialPulse();
+                return;
+              }
+            }
+
+            gestureModeRef.current = "pan";
+            panBaseRef.current = [...gestureStateRef.current.position];
+          }
+          return;
+        }
+
+        if (gestureModeRef.current === "pan") {
+          const base = panBaseRef.current;
+          const targetX = base[0] + gestureState.dx * TRANSLATE_SENSITIVITY;
+          const targetZ = base[2] + gestureState.dy * TRANSLATE_SENSITIVITY;
+
+          const curX = gestureStateRef.current.position[0];
+          const curZ = gestureStateRef.current.position[2];
+          const newX = curX + (targetX - curX) * SMOOTHING;
+          const newZ = curZ + (targetZ - curZ) * SMOOTHING;
+
+          const newPos: [number, number, number] = [newX, base[1], newZ];
+          gestureStateRef.current.position = newPos;
+          setModelPosition(newPos);
         }
       },
 
-      onPanResponderRelease: () => {},
-      onPanResponderTerminate: () => {},
+      onPanResponderRelease: () => {
+        if (latchTimerRef.current) clearTimeout(latchTimerRef.current);
+        stopDialPulse();
+
+        if (gestureModeRef.current !== "latch") {
+          gestureModeRef.current = "idle";
+        }
+      },
+
+      onPanResponderTerminate: () => {
+        if (latchTimerRef.current) clearTimeout(latchTimerRef.current);
+        stopDialPulse();
+        gestureModeRef.current = "idle";
+      },
     })
   ).current;
+
+  const handleTapToUnlatch = useCallback(() => {
+    if (isLatched) {
+      setIsLatched(false);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  }, [isLatched]);
 
   const handleSelectVariant = (variant: ColorVariant) => {
     setSelectedVariant(variant);
@@ -174,15 +351,16 @@ export function ARProductViewer({
 
   return (
     <GestureHandlerRootView style={styles.fill}>
-      <View style={styles.fill}>
+      <View style={styles.fill} removeClippedSubviews={true}>
         <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
           <NativeARSession
-            glbUrl={product.glbUrl}
+            glbUrl={TEST_GLB_URL}
             usdzUrl={product.usdzUrl}
             color={selectedVariant.color}
             modelPosition={modelPosition}
             modelScale={modelScale}
             modelRotation={modelRotation}
+            isLatched={isLatched}
             onAnchorFound={onARAnchorFound}
             onError={onARError}
           />
@@ -190,13 +368,44 @@ export function ARProductViewer({
 
         <View
           style={StyleSheet.absoluteFill}
+          pointerEvents="auto"
           {...panResponder.panHandlers}
+        />
+
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          pointerEvents={isLatched ? "auto" : "none"}
+          onPress={handleTapToUnlatch}
+        />
+
+        <Animated.View
+          style={[
+            styles.dialIndicator,
+            {
+              opacity: dialOpacity,
+              pointerEvents: "none",
+            },
+          ]}
+        >
+          <View style={styles.dialRingOuter}>
+            <View style={styles.dialRingMiddle} />
+            <View style={styles.dialRingInner} />
+          </View>
+          <Text style={styles.dialLabel}>SWIPE TO ROTATE</Text>
+        </Animated.View>
+
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            styles.latchOverlay,
+            { opacity: latchIndicatorOpacity, pointerEvents: "none" },
+          ]}
         />
 
         <View
           style={[
             StyleSheet.absoluteFill,
-            { backgroundColor: "rgba(0,0,0,0.10)", pointerEvents: "none" },
+            { backgroundColor: "rgba(0,0,0,0.08)", pointerEvents: "none" },
           ]}
         />
 
@@ -406,5 +615,46 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 17,
     fontFamily: "Inter_700Bold",
+  },
+  dialIndicator: {
+    position: "absolute",
+    bottom: 260,
+    alignSelf: "center",
+    alignItems: "center",
+    gap: 8,
+  },
+  dialRingOuter: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 1.5,
+    borderColor: "rgba(167, 139, 250, 0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dialRingMiddle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(167, 139, 250, 0.35)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dialRingInner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "rgba(167, 139, 250, 0.5)",
+  },
+  dialLabel: {
+    color: "rgba(167, 139, 250, 0.7)",
+    fontSize: 9,
+    fontWeight: "600",
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+  },
+  latchOverlay: {
+    backgroundColor: "rgba(167, 139, 250, 0.06)",
   },
 });

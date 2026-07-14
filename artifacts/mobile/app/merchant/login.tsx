@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -21,7 +21,7 @@ import { useColors } from "@/hooks/useColors";
 export default function MerchantLoginScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { login, user } = useAuth();
+  const { login, user, profileRole, isAuthLoading } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,10 +29,11 @@ export default function MerchantLoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  if (user) {
-    router.replace("/merchant/dashboard");
-    return null;
-  }
+  useEffect(() => {
+    if (!isAuthLoading && user && profileRole === "merchant_owner") {
+      router.replace("/merchant/dashboard");
+    }
+  }, [user, profileRole, isAuthLoading]);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -47,7 +48,7 @@ export default function MerchantLoginScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         router.replace("/merchant/dashboard");
       } else {
-        setError("Invalid credentials. Try demo@merchant.com / demo1234");
+        setError("Invalid credentials or insufficient permissions.");
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
     } finally {
@@ -81,7 +82,7 @@ export default function MerchantLoginScreen() {
             Merchant Portal
           </Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-            Enterprise dashboard for store managers
+            Sign in with your merchant account
           </Text>
         </View>
 
@@ -198,13 +199,13 @@ export default function MerchantLoginScreen() {
 
         <View
           style={[
-            styles.demoHint,
+            styles.infoHint,
             { backgroundColor: colors.secondary, borderRadius: colors.radius },
           ]}
         >
           <Feather name="info" size={14} color={colors.mutedForeground} />
-          <Text style={[styles.demoText, { color: colors.mutedForeground }]}>
-            Demo: demo@merchant.com / demo1234
+          <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
+            Only accounts with merchant_owner role can access the management console.
           </Text>
         </View>
       </ScrollView>
@@ -288,13 +289,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: "Inter_600SemiBold",
   },
-  demoHint: {
+  infoHint: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     padding: 12,
   },
-  demoText: {
+  infoText: {
     fontSize: 12,
     fontFamily: "Inter_400Regular",
     flex: 1,
