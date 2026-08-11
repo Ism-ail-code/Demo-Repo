@@ -27,8 +27,7 @@
         "NSPhotoLibraryUsageDescription": "AR Commerce saves AR captures to your photo library.",
         "NSPhotoLibraryAddUsageDescription": "AR Commerce saves AR captures to your photo library.",
         "UIRequiredDeviceCapabilities": [
-          "arkit",
-          "camera-flash"
+          "arkit"
         ],
         "UIBackgroundModes": [],
         "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to use your microphone"

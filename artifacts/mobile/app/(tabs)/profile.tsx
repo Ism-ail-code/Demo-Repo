@@ -272,7 +272,7 @@ export default function ProfileScreen() {
           <SettingRow
             icon="globe"
             label="Deep Link Format"
-            value="mobile://viewer"
+            value="arcommerce://p/:slug"
           />
         </View>
       </View>
