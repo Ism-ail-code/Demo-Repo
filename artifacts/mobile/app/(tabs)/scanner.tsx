@@ -18,6 +18,63 @@ import { useColors } from "@/hooks/useColors";
 const { width: W, height: H } = Dimensions.get("window");
 const FRAME_SIZE = Math.min(W * 0.65, 280);
 
+interface QrPayload {
+  slug?: string;
+  product_id?: string;
+  merchant_slug?: string;
+}
+
+function parsePathSegments(path: string):
+  | { slug?: string; action?: string }
+  | undefined {
+  const segments = path.split("/").filter(Boolean);
+  if (segments.length === 0) return undefined;
+  const [prefix, ...rest] = segments;
+  if (prefix === "p" && rest.length > 0) {
+    try {
+      return { slug: decodeURIComponent(rest.join("/")) };
+    } catch {
+      return { slug: rest.join("/") };
+    }
+  }
+  if (prefix === "viewer") {
+    return { action: "viewer" };
+  }
+  return undefined;
+}
+
+function parseQrPayload(raw: string): QrPayload | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const lower = trimmed.toLowerCase();
+
+  if (lower.startsWith("arcommerce://") || lower.startsWith("mobile://")) {
+    const rest = trimmed.slice(trimmed.indexOf("://") + 3);
+    const [pathPart, queryPart] = rest.split("?");
+    const query = new URLSearchParams(queryPart ?? "");
+    const productId = query.get("product_id") || undefined;
+    const merchantSlug = query.get("merchant_slug") || undefined;
+    const fromPath = parsePathSegments(pathPart);
+    if (fromPath?.slug || fromPath?.action === "viewer" || productId) {
+      return { slug: fromPath?.slug, product_id: productId, merchant_slug: merchantSlug };
+    }
+    return null;
+  }
+
+  try {
+    const url = new URL(trimmed);
+    const fromPath = parsePathSegments(url.pathname);
+    const productId = url.searchParams.get("product_id") || undefined;
+    const merchantSlug = url.searchParams.get("merchant_slug") || undefined;
+    if (fromPath?.slug || productId) {
+      return { slug: fromPath?.slug, product_id: productId, merchant_slug: merchantSlug };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function PermissionView({ onRequest }: { onRequest: () => void }) {
   const colors = useColors();
   return (
@@ -93,19 +150,17 @@ export default function ScannerScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       setTimeout(() => {
-        try {
-          const url = new URL(data);
-          const productId = url.searchParams.get("product_id");
-          const merchantSlug = url.searchParams.get("merchant_slug");
-          if (productId) {
-            router.push({
-              pathname: "/viewer",
-              params: { product_id: productId, merchant_slug: merchantSlug ?? "" },
-            });
-          } else {
-            setScanned(false);
-          }
-        } catch {
+        const resolved = parseQrPayload(data);
+        if (resolved) {
+          router.push({
+            pathname: "/viewer",
+            params: {
+              product_id: resolved.product_id ?? "",
+              slug: resolved.slug ?? "",
+              merchant_slug: resolved.merchant_slug ?? "",
+            },
+          });
+        } else {
           setScanned(false);
         }
       }, 400);
