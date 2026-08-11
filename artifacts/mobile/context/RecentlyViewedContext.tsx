@@ -7,7 +7,8 @@ import React, {
   useState,
 } from "react";
 
-import { Product, getProductById } from "@/constants/products";
+import { Product } from "@/constants/products";
+import { fetchProductById } from "@/services/productService";
 
 interface RecentlyViewedContextType {
   recentProducts: Product[];
@@ -30,6 +31,7 @@ export function RecentlyViewedProvider({
   children: React.ReactNode;
 }) {
   const [recentIds, setRecentIds] = useState<string[]>([]);
+  const [recentProducts, setRecentProducts] = useState<Product[]>([]);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((raw) => {
@@ -40,6 +42,27 @@ export function RecentlyViewedProvider({
       }
     });
   }, []);
+
+  useEffect(() => {
+    if (recentIds.length === 0) {
+      setRecentProducts([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const products = await Promise.all(
+        recentIds.map((id) => fetchProductById(id))
+      );
+      if (!cancelled) {
+        setRecentProducts(
+          products.filter((p): p is Product => p !== null)
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [recentIds]);
 
   const addRecentProduct = useCallback((productId: string) => {
     setRecentIds((prev) => {
@@ -54,10 +77,6 @@ export function RecentlyViewedProvider({
     setRecentIds([]);
     AsyncStorage.removeItem(STORAGE_KEY);
   }, []);
-
-  const recentProducts = recentIds
-    .map((id) => getProductById(id))
-    .filter((p): p is Product => p !== undefined);
 
   return (
     <RecentlyViewedContext.Provider
