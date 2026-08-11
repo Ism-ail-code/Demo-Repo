@@ -73,12 +73,12 @@ export default function DashboardScreen() {
   const [scanData] = useState([420, 380, 510, 620, 490, 710, 843]);
 
   useEffect(() => {
-    if (!isAuthLoading && (!user || profileRole !== "merchant_owner")) {
+    if (!isAuthLoading && (!user || !profileRole.startsWith("merchant_"))) {
       router.replace("/merchant/login");
     }
   }, [user, profileRole, isAuthLoading]);
 
-  if (!user || profileRole !== "merchant_owner") return null;
+  if (!user || !profileRole.startsWith("merchant_")) return null;
 
   const handleLogout = async () => {
     await logout();

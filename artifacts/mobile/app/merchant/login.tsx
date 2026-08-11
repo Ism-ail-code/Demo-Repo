@@ -30,7 +30,7 @@ export default function MerchantLoginScreen() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!isAuthLoading && user && profileRole === "merchant_owner") {
+    if (!isAuthLoading && user && profileRole.startsWith("merchant_")) {
       router.replace("/merchant/dashboard");
     }
   }, [user, profileRole, isAuthLoading]);
@@ -205,7 +205,7 @@ export default function MerchantLoginScreen() {
         >
           <Feather name="info" size={14} color={colors.mutedForeground} />
           <Text style={[styles.infoText, { color: colors.mutedForeground }]}>
-            Only accounts with merchant_owner role can access the management console.
+            Only merchant team members (owner, admin, member) can access the management console.
           </Text>
         </View>
       </ScrollView>
