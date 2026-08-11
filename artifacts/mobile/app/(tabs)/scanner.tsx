@@ -14,6 +14,7 @@ import {
 } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
+import { trackEvent } from "@/services/productService";
 
 const { width: W, height: H } = Dimensions.get("window");
 const FRAME_SIZE = Math.min(W * 0.65, 280);
@@ -152,6 +153,10 @@ export default function ScannerScreen() {
       setTimeout(() => {
         const resolved = parseQrPayload(data);
         if (resolved) {
+          trackEvent({
+            event_type: "qr_open",
+            product_id: resolved.product_id ?? null,
+          });
           router.push({
             pathname: "/viewer",
             params: {
