@@ -1,297 +1,184 @@
-import { Platform } from "react-native";
-
 import { ColorVariant, Product, SAMPLE_PRODUCTS } from "@/constants/products";
-import {
-  DbAsset,
-  DbProduct,
-  DbProductWithRelations,
-  DbVariant,
-  supabase,
-} from "./supabase";
+import { DbMerchant, DbProduct, DbVariant, supabase } from "./supabase";
 
-function resolveAssetUrl(asset: DbAsset): string {
-  return asset.file_url ?? asset.glb_url ?? asset.usdz_url ?? asset.url ?? "";
+const DEFAULT_BRAND_COLOR = "#7c3aed";
+
+export function isSafeHttpsUrl(
+  url: string | null | undefined
+): url is string {
+  if (!url) return false;
+  try {
+    return new URL(url).protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
-function resolveGlb(assets: DbAsset[]): string | null {
-  const a =
-    assets.find((x) => x.file_type === "glb") ??
-    assets.find((x) => x.platform === "android" || x.platform === "all") ??
-    assets.find((x) => x.glb_url != null) ??
-    assets.find((x) => x.platform !== "ios") ??
-    assets[0];
-  return a ? resolveAssetUrl(a) : null;
+function hexToRGBA(
+  hex: string | null | undefined
+): [number, number, number, number] {
+  if (!hex) return [0.5, 0.5, 0.5, 1];
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return [0.5, 0.5, 0.5, 1];
+  const n = parseInt(m[1], 16);
+  return [
+    ((n >> 16) & 255) / 255,
+    ((n >> 8) & 255) / 255,
+    (n & 255) / 255,
+    1,
+  ];
 }
 
-function resolveUsdz(assets: DbAsset[], fallbackGlb: string | null): string | null {
-  const a =
-    assets.find((x) => x.file_type === "usdz") ??
-    assets.find((x) => x.platform === "ios") ??
-    assets.find((x) => x.usdz_url != null);
-  if (a) return a.usdz_url ?? a.file_url ?? fallbackGlb;
-  return fallbackGlb;
-}
-
-function dbProductToLocal(row: DbProductWithRelations): Product {
-  const fallbackSeed = SAMPLE_PRODUCTS[0];
-  const assets: DbAsset[] = Array.isArray(row.assets) ? row.assets : [];
-  const variants: DbVariant[] = Array.isArray(row.product_variants)
-    ? row.product_variants
-    : [];
-
-  const glbUrl = resolveGlb(assets) ?? fallbackSeed.glbUrl;
-  const usdzUrl = resolveUsdz(assets, glbUrl) ?? glbUrl;
-
-  const colorVariants: ColorVariant[] = variants.map((v) => ({
+function dbProductToLocal(
+  row: DbProduct,
+  merchant: Pick<DbMerchant, "name" | "slug" | "brand_color"> | null,
+  variants: DbVariant[]
+): Product {
+  const variantList = Array.isArray(variants) ? variants : [];
+  const colorVariants: ColorVariant[] = variantList.map((v) => ({
     id: v.id,
-    name: v.name ?? v.label ?? "Default",
-    color: v.color_hex ?? v.hex ?? v.color ?? "#888888",
-    baseColorFactor: [
-      v.base_color_r ?? 0.5,
-      v.base_color_g ?? 0.5,
-      v.base_color_b ?? 0.5,
-      v.base_color_a ?? 1.0,
-    ],
+    name: v.name || "Default",
+    color: v.color_hex || "#888888",
+    baseColorFactor: hexToRGBA(v.color_hex),
   }));
 
-  const merchantName =
-    row.merchant ?? row.merchant_name ?? "Unknown Merchant";
-  const merchantSlug = row.merchant_id ?? row.merchant_slug ?? row.id;
-  const checkoutUrl = row.checkout_url ?? "https://example.com";
-  const thumbnailColor =
-    row.thumbnail_color ??
-    row.primary_color ??
-    colorVariants[0]?.color ??
-    fallbackSeed.thumbnailColor;
+  const fallbackVariant: ColorVariant = {
+    id: "default",
+    name: "Default",
+    color: merchant?.brand_color ?? DEFAULT_BRAND_COLOR,
+    baseColorFactor: hexToRGBA(merchant?.brand_color),
+  };
+
+  const glbUrl = isSafeHttpsUrl(row.model_glb_url) ? row.model_glb_url : "";
+  const usdzUrl = isSafeHttpsUrl(row.model_usdz_url)
+    ? row.model_usdz_url
+    : glbUrl;
 
   return {
     id: row.id,
-    name: row.name ?? row.title ?? "Unnamed Product",
-    merchant: merchantName,
-    merchantSlug,
-    checkoutUrl,
+    name: row.title || "Unnamed Product",
+    merchant: merchant?.name ?? "Unknown Merchant",
+    merchantSlug: merchant?.slug ?? row.merchant_id,
+    checkoutUrl: isSafeHttpsUrl(row.buy_url) ? row.buy_url : "",
     description: row.description ?? "",
-    category: row.category ?? "Other",
-    scanCount: row.scan_count ?? row.views ?? row.view_count ?? 0,
+    category: "Other",
+    scanCount: 0,
     colorVariants:
-      colorVariants.length > 0 ? colorVariants : fallbackSeed.colorVariants,
+      colorVariants.length > 0 ? colorVariants : [fallbackVariant],
     glbUrl,
     usdzUrl,
-    thumbnailColor,
+    thumbnailColor:
+      merchant?.brand_color ?? colorVariants[0]?.color ?? DEFAULT_BRAND_COLOR,
+    merchantId: row.merchant_id,
+    businessId: row.business_id ?? undefined,
+    priceCents: row.price_cents,
+    currency: row.currency,
+    imageUrl: isSafeHttpsUrl(row.thumbnail_url)
+      ? row.thumbnail_url
+      : isSafeHttpsUrl(row.image_url)
+        ? row.image_url
+        : "",
   };
 }
 
-// ─── Fetch helpers ────────────────────────────────────────────────────────────
+const PRODUCT_QUERY =
+  "id, slug, title, description, price_cents, currency, thumbnail_url, image_url, model_glb_url, model_usdz_url, buy_url, status, merchant_id, business_id, external_sku, external_product_id";
+const MERCHANT_QUERY = "id, slug, name, logo_url, brand_color, store_domain";
+const VARIANT_QUERY =
+  "id, product_id, name, color_hex, model_glb_url, model_usdz_url, thumbnail_url, sort_order";
 
-async function fetchMerchantsByIds(
-  ids: string[]
-): Promise<Map<string, { name: string; slug: string; checkout_url: string | null }>> {
-  if (ids.length === 0) return new Map();
+async function fetchProductRow(slug?: string, productId?: string): Promise<Product | null> {
   try {
-    const { data, error } = await supabase
-      .from("merchants")
-      .select("id, name, slug")
-      .in("id", ids);
-    if (error) {
-      console.warn("[Supabase] merchants fetch error:", error.code, error.message);
-      return new Map();
-    }
-    const map = new Map<string, { name: string; slug: string; checkout_url: string | null }>();
-    for (const m of data ?? []) {
-      map.set((m as any).id, { ...(m as any), checkout_url: null });
-    }
-    return map;
-  } catch {
-    return new Map();
-  }
-}
+    let query = supabase.from("products").select(PRODUCT_QUERY);
+    if (slug) query = query.eq("slug", slug);
+    if (productId) query = query.eq("id", productId);
+    const { data: row, error } = await query
+      .eq("status", "active")
+      .maybeSingle();
 
-async function fetchAssetsByProductIds(
-  ids: string[]
-): Promise<Map<string, DbAsset[]>> {
-  if (ids.length === 0) return new Map();
-  try {
-    const { data, error } = await supabase
-      .from("assets")
-      .select("*")
-      .in("product_id", ids);
-    if (error) {
-      console.warn("[Supabase] assets fetch error:", error.code, error.message);
-      return new Map();
+    if (error || !row) {
+      console.warn("[Supabase] fetchProduct error:", error?.code, error?.message ?? "not found");
+      return null;
     }
-    const map = new Map<string, DbAsset[]>();
-    for (const a of data ?? []) {
-      const pid = (a as DbAsset).product_id;
-      if (!map.has(pid)) map.set(pid, []);
-      map.get(pid)!.push(a as DbAsset);
-    }
-    return map;
-  } catch {
-    return new Map();
-  }
-}
 
-async function fetchVariantsByProductIds(
-  ids: string[]
-): Promise<Map<string, DbVariant[]>> {
-  if (ids.length === 0) return new Map();
-  try {
-    const { data, error } = await supabase
-      .from("product_variants")
-      .select("*")
-      .in("product_id", ids);
-    if (error) {
-      console.warn("[Supabase] variants fetch error:", error.code, error.message);
-      return new Map();
-    }
-    const map = new Map<string, DbVariant[]>();
-    for (const v of data ?? []) {
-      const pid = (v as DbVariant).product_id;
-      if (!map.has(pid)) map.set(pid, []);
-      map.get(pid)!.push(v as DbVariant);
-    }
-    return map;
-  } catch {
-    return new Map();
+    const product = row as DbProduct;
+    const [merchantRes, variantsRes] = await Promise.all([
+      supabase
+        .from("merchants")
+        .select(MERCHANT_QUERY)
+        .eq("id", product.merchant_id)
+        .maybeSingle(),
+      supabase
+        .from("product_variants")
+        .select(VARIANT_QUERY)
+        .eq("product_id", product.id)
+        .order("sort_order", { ascending: true }),
+    ]);
+
+    const merchant = merchantRes.error ? null : (merchantRes.data as DbMerchant | null);
+    const variants =
+      (variantsRes.data as DbVariant[] | null) ?? [];
+
+    return dbProductToLocal(product, merchant, variants);
+  } catch (err) {
+    console.warn("[Supabase] fetchProduct exception:", err);
+    return null;
   }
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-export async function fetchProductById(productId: string): Promise<Product> {
-  const localSeed = SAMPLE_PRODUCTS.find((p) => p.id === productId);
+export async function fetchProductBySlug(slug: string): Promise<Product | null> {
+  return fetchProductRow(slug);
+}
 
-  try {
-    const { data, error } = await supabase
-      .from("products")
-      .select("*")
-      .eq("id", productId)
-      .maybeSingle();
-
-    if (error) {
-      console.warn("[Supabase] fetchProductById error:", error.code, error.message);
-      return localSeed ?? SAMPLE_PRODUCTS[0];
-    }
-    if (!data) {
-      return localSeed ?? SAMPLE_PRODUCTS[0];
-    }
-
-    const productRow = data as DbProduct;
-    const merchantId = productRow.merchant_id ?? "";
-    const [assetMap, variantMap, merchantMap] = await Promise.all([
-      fetchAssetsByProductIds([productId]),
-      fetchVariantsByProductIds([productId]),
-      fetchMerchantsByIds(merchantId ? [merchantId] : []),
-    ]);
-
-    const m = merchantId ? merchantMap.get(merchantId) : undefined;
-    const row: DbProductWithRelations = {
-      ...productRow,
-      merchant: m?.name ?? productRow.merchant,
-      merchant_name: m?.name ?? productRow.merchant_name,
-      merchant_slug: m?.slug ?? null,
-      checkout_url: productRow.checkout_url ?? m?.checkout_url ?? null,
-      assets: assetMap.get(productId) ?? [],
-      product_variants: variantMap.get(productId) ?? [],
-    };
-    console.info("[Supabase] fetched product:", row.name ?? row.title);
-    return dbProductToLocal(row);
-  } catch (err) {
-    console.warn("[Supabase] fetchProductById exception:", err);
-    return localSeed ?? SAMPLE_PRODUCTS[0];
-  }
+export async function fetchProductById(productId: string): Promise<Product | null> {
+  return fetchProductRow(undefined, productId);
 }
 
 export async function fetchTrendingProducts(limit = 10): Promise<Product[]> {
   try {
-    const { data: rows, error } = await supabase
+    const { data, error } = await supabase
       .from("products")
-      .select("*")
+      .select(PRODUCT_QUERY)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
       .limit(limit);
 
-    if (error) {
-      console.warn("[Supabase] fetchTrending error:", error.code, error.message);
-      return SAMPLE_PRODUCTS.filter((p) => p.category !== "Demo");
-    }
-    if (!rows || rows.length === 0) {
-      console.info("[Supabase] products table empty, using seed data");
+    if (error || !data || data.length === 0) {
+      console.warn("[Supabase] fetchTrending error:", error?.code, error?.message ?? "empty");
       return SAMPLE_PRODUCTS.filter((p) => p.category !== "Demo");
     }
 
-    const productRows = rows as DbProduct[];
-    const ids = productRows.map((r) => r.id);
-    const merchantIds = [...new Set(productRows.map((r) => r.merchant_id).filter(Boolean) as string[])];
-
-    const [assetMap, variantMap, merchantMap] = await Promise.all([
-      fetchAssetsByProductIds(ids),
-      fetchVariantsByProductIds(ids),
-      fetchMerchantsByIds(merchantIds),
+    const rows = data as DbProduct[];
+    const merchantIds = [...new Set(rows.map((r) => r.merchant_id))];
+    const [merchantRes, variantsRes] = await Promise.all([
+      merchantIds.length > 0
+        ? supabase.from("merchants").select(MERCHANT_QUERY).in("id", merchantIds)
+        : Promise.resolve({ data: null, error: null } as const),
+      supabase
+        .from("product_variants")
+        .select(VARIANT_QUERY)
+        .in("product_id", rows.map((r) => r.id)),
     ]);
 
-    console.info("[Supabase] fetched", rows.length, "live products");
+    const merchants = new Map<string, DbMerchant>();
+    for (const m of (merchantRes?.data as DbMerchant[] | null) ?? []) {
+      merchants.set(m.id, m);
+    }
 
-    return productRows.map((row) => {
-      const m = row.merchant_id ? merchantMap.get(row.merchant_id) : undefined;
-      return dbProductToLocal({
-        ...row,
-        merchant: m?.name ?? row.merchant,
-        merchant_name: m?.name ?? row.merchant_name,
-        merchant_slug: m?.slug ?? null,
-        checkout_url: row.checkout_url ?? m?.checkout_url ?? null,
-        assets: assetMap.get(row.id) ?? [],
-        product_variants: variantMap.get(row.id) ?? [],
-      });
-    });
+    const variantsByProduct = new Map<string, DbVariant[]>();
+    for (const v of (variantsRes.data as DbVariant[] | null) ?? []) {
+      const list = variantsByProduct.get(v.product_id) ?? [];
+      list.push(v);
+      variantsByProduct.set(v.product_id, list);
+    }
+
+    return rows.map((r) =>
+      dbProductToLocal(r, merchants.get(r.merchant_id) ?? null, variantsByProduct.get(r.id) ?? [])
+    );
   } catch (err) {
     console.warn("[Supabase] fetchTrending exception:", err);
     return SAMPLE_PRODUCTS.filter((p) => p.category !== "Demo");
-  }
-}
-
-// ─── Analytics ────────────────────────────────────────────────────────────────
-
-export interface TrackEventPayload {
-  event_type: "product_view" | "color_change" | "buy_now" | "qr_scan";
-  product_id: string;
-  merchant_slug: string;
-  variant_id?: string;
-  platform?: string;
-}
-
-export async function trackEvent(payload: TrackEventPayload): Promise<void> {
-  const baseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
-  const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
-
-  try {
-    await fetch(`${baseUrl}/functions/v1/track-event`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${anonKey}`,
-        apikey: anonKey,
-      },
-      body: JSON.stringify({
-        ...payload,
-        platform: Platform.OS,
-        timestamp: new Date().toISOString(),
-      }),
-    });
-  } catch {
-    /* fire-and-forget */
-  }
-
-  try {
-    await supabase.from("analytics_events").insert([
-      {
-        event_type: payload.event_type,
-        product_id: payload.product_id,
-        merchant_slug: payload.merchant_slug,
-        variant_id: payload.variant_id ?? null,
-        platform: Platform.OS,
-        occurred_at: new Date().toISOString(),
-      },
-    ]);
-  } catch {
-    /* fire-and-forget */
   }
 }
