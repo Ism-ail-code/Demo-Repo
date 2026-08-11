@@ -35,68 +35,58 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
+export type DbRole =
+  | "admin"
+  | "merchant_owner"
+  | "merchant_admin"
+  | "merchant_member"
+  | "consumer";
+
 export interface DbMerchant {
   id: string;
-  name: string | null;
-  slug: string | null;
-  checkout_url: string | null;
-  website_url: string | null;
+  slug: string;
+  name: string;
+  logo_url: string | null;
+  brand_color: string | null;
+  store_domain: string | null;
 }
 
 export interface DbProduct {
   id: string;
-  name: string | null;
-  title: string | null;
+  slug: string;
+  title: string;
   description: string | null;
-  merchant_id: string | null;
-  merchant: string | null;
-  merchant_name: string | null;
-  merchant_slug: string | null;
-  checkout_url: string | null;
-  thumbnail_color: string | null;
-  primary_color: string | null;
-  category: string | null;
-  scan_count: number | null;
-  views: number | null;
-  view_count: number | null;
-  merchants?: DbMerchant | null;
-}
-
-export interface DbAsset {
-  id: string;
-  product_id: string;
-  platform: "ios" | "android" | "all" | null;
-  file_url: string | null;
-  glb_url: string | null;
-  usdz_url: string | null;
-  url: string | null;
-  file_type: "glb" | "usdz" | null;
+  price_cents: number;
+  currency: string;
+  thumbnail_url: string | null;
+  image_url: string | null;
+  model_glb_url: string | null;
+  model_usdz_url: string | null;
+  buy_url: string | null;
+  status: string;
+  merchant_id: string;
+  business_id: string | null;
+  external_sku: string | null;
+  external_product_id: string | null;
 }
 
 export interface DbVariant {
   id: string;
   product_id: string;
-  name: string | null;
-  label: string | null;
+  name: string;
   color_hex: string | null;
-  hex: string | null;
-  color: string | null;
-  base_color_r: number | null;
-  base_color_g: number | null;
-  base_color_b: number | null;
-  base_color_a: number | null;
-}
-
-export interface DbProductWithRelations extends DbProduct {
-  assets: DbAsset[];
-  product_variants: DbVariant[];
+  model_glb_url: string | null;
+  model_usdz_url: string | null;
+  thumbnail_url: string | null;
+  sort_order: number;
 }
 
 export interface DbProfile {
   id: string;
   email: string | null;
   full_name: string | null;
-  role: "merchant_owner" | "consumer";
+  corporate_title: string | null;
+  role: DbRole;
   merchant_id: string | null;
   avatar_url: string | null;
   created_at: string | null;
