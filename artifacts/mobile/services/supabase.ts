@@ -93,23 +93,69 @@ export interface DbProfile {
 }
 
 export async function fetchProfile(
-  userId: string
+  userId: string,
+  email?: string
 ): Promise<DbProfile | null> {
   try {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id, email, full_name, role, merchant_id, avatar_url, created_at")
-      .eq("id", userId)
-      .single();
+    const [{ data: profile }, { data: userRoles }, { data: memberships }, { data: merchantId }] =
+      await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id, full_name, corporate_title, created_at")
+          .eq("id", userId)
+          .maybeSingle(),
+        supabase.from("user_roles").select("role").eq("user_id", userId),
+        supabase
+          .from("merchant_members")
+          .select("merchant_id, role")
+          .eq("user_id", userId),
+        supabase.rpc("get_user_merchant_id", { _user_id: userId }),
+      ]);
 
-    if (error || !data) {
-      console.warn("[Supabase] profile fetch error:", error?.code, error?.message);
-      return null;
+    const isAdmin =
+      Array.isArray(userRoles) &&
+      userRoles.some((r) => (r as { role: string }).role === "admin");
+
+    const membership =
+      Array.isArray(memberships) && memberships.length > 0
+        ? (memberships[0] as { merchant_id: string; role: string })
+        : null;
+
+    let role: DbRole = "consumer";
+    let resolvedMerchantId: string | null = null;
+
+    if (isAdmin) {
+      role = "admin";
+    } else if (membership) {
+      resolvedMerchantId = membership.merchant_id;
+      role =
+        membership.role === "owner"
+          ? "merchant_owner"
+          : membership.role === "admin"
+            ? "merchant_admin"
+            : "merchant_member";
     }
+    resolvedMerchantId =
+      resolvedMerchantId ?? (typeof merchantId === "string" ? merchantId : null);
 
-    const profile = data as DbProfile;
-    await AsyncStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profile));
-    return profile;
+    const row =
+      profile && !Array.isArray(profile)
+        ? (profile as { id: string; full_name: string | null; corporate_title: string | null; created_at: string | null })
+        : null;
+
+    const dbProfile: DbProfile = {
+      id: userId,
+      email: email ?? null,
+      full_name: row?.full_name ?? null,
+      corporate_title: row?.corporate_title ?? null,
+      role,
+      merchant_id: resolvedMerchantId,
+      avatar_url: null,
+      created_at: row?.created_at ?? null,
+    };
+
+    await AsyncStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(dbProfile));
+    return dbProfile;
   } catch (err) {
     console.warn("[Supabase] profile fetch exception:", err);
     try {
