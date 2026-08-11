@@ -1,3 +1,4 @@
+import Constants, { ExecutionEnvironment } from "expo-constants";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -26,30 +27,50 @@ import type { ViroTrackingState, ViroTrackingReason } from "@reactvision/react-v
 const INITIAL_POSITION: [number, number, number] = [0, 0, -1];
 const INITIAL_SCALE = 0.3;
 
-ViroMaterials.createMaterials({
-  productPBR: {
-    lightingModel: "PBR",
-    roughness: 0.4,
-    metalness: 0.12,
-    diffuseIntensity: 1.0,
-    writesToDepthBuffer: true,
-    readsFromDepthBuffer: true,
-  },
-  dialRing: {
-    lightingModel: "PBR",
-    diffuseColor: "rgba(167, 139, 250, 0.25)",
-    roughness: 0.1,
-    metalness: 0.9,
-    readsFromDepthBuffer: false,
-    writesToDepthBuffer: false,
-  },
-  dialRingGlow: {
-    lightingModel: "Constant",
-    diffuseColor: "rgba(167, 139, 250, 0.12)",
-    readsFromDepthBuffer: false,
-    writesToDepthBuffer: false,
-  },
-});
+/**
+ * AR requires the Viro native runtime, which is only present in development
+ * builds / standalone builds (expo run, EAS). Expo Go and web do not include
+ * it, so mounting a ViroARSceneNavigator there crashes the app.
+ */
+export function isArSessionSupported(): boolean {
+  if (Platform.OS !== "android" && Platform.OS !== "ios") return false;
+  if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) {
+    return false;
+  }
+  if (Constants.appOwnership === "expo") {
+    return false;
+  }
+  return true;
+}
+
+try {
+  ViroMaterials.createMaterials({
+    productPBR: {
+      lightingModel: "PBR",
+      roughness: 0.4,
+      metalness: 0.12,
+      diffuseIntensity: 1.0,
+      writesToDepthBuffer: true,
+      readsFromDepthBuffer: true,
+    },
+    dialRing: {
+      lightingModel: "PBR",
+      diffuseColor: "rgba(167, 139, 250, 0.25)",
+      roughness: 0.1,
+      metalness: 0.9,
+      readsFromDepthBuffer: false,
+      writesToDepthBuffer: false,
+    },
+    dialRingGlow: {
+      lightingModel: "Constant",
+      diffuseColor: "rgba(167, 139, 250, 0.12)",
+      readsFromDepthBuffer: false,
+      writesToDepthBuffer: false,
+    },
+  });
+} catch (err) {
+  console.warn("[AR] Viro materials unavailable:", err);
+}
 
 export interface NativeARSessionProps {
   glbUrl: string;
@@ -247,6 +268,19 @@ export function NativeARSession({
     setModelLoaded(true);
   }, []);
 
+  if (!isArSessionSupported()) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.unsupportedTitle}>AR unavailable</Text>
+        <Text style={styles.unsupportedBody}>
+          This runtime does not include the Viro AR engine. Open the app in a
+          development or production build (expo run / EAS build) on an
+          ARCore- or ARKit-capable device to use AR.
+        </Text>
+      </View>
+    );
+  }
+
   if (!isReady) {
     return (
       <View style={styles.centered}>
@@ -339,6 +373,19 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.7)",
     fontSize: 14,
     marginTop: 12,
+  },
+  unsupportedTitle: {
+    color: "#fff",
+    fontSize: 17,
+    fontWeight: "600",
+  },
+  unsupportedBody: {
+    color: "rgba(255,255,255,0.55)",
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 19,
+    paddingHorizontal: 32,
+    marginTop: 8,
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
