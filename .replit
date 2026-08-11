@@ -22,8 +22,8 @@ timeoutMs = 20000
 [userenv]
 
 [userenv.shared]
-EXPO_PUBLIC_SUPABASE_URL = "https://tcujcbwkginjfqworinz.supabase.co"
-EXPO_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjdWpjYndrZ2luamZxd29yaW56Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MTgyMzgsImV4cCI6MjA5NzA5NDIzOH0.NZmKPxRjqdseoTqpn20l7HZy_WwmpzxjagpXXBwRJ5k"
+EXPO_PUBLIC_SUPABASE_URL = "https://okoloionftfxyvscfvhh.supabase.co"
+EXPO_PUBLIC_SUPABASE_ANON_KEY = "sb_publishable_6DnT8yYOEAuZYnzo39XBCw_K9bq8S-A"
 
 [[ports]]
 localPort = 8080
