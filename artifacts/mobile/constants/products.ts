@@ -18,6 +18,11 @@ export interface Product {
   glbUrl: string;
   usdzUrl: string;
   thumbnailColor: string;
+  merchantId?: string;
+  businessId?: string;
+  priceCents?: number;
+  currency?: string;
+  imageUrl?: string;
 }
 
 export const SAMPLE_PRODUCTS: Product[] = [
