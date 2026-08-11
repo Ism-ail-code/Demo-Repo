@@ -33,7 +33,7 @@ function RoleRouter() {
     if (isAuthLoading || !navState?.routes) return;
     if (hasRedirected.current) return;
 
-    if (user && profileRole === "merchant_owner") {
+    if (user && profileRole.startsWith("merchant_")) {
       hasRedirected.current = true;
       router.replace("/merchant/dashboard");
     }

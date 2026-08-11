@@ -8,9 +8,9 @@ import React, {
   useState,
 } from "react";
 
-import { clearProfileCache, DbProfile, fetchProfile, supabase } from "@/services/supabase";
+import { clearProfileCache, DbProfile, DbRole, fetchProfile, supabase } from "@/services/supabase";
 
-export type AppRole = "merchant_owner" | "consumer";
+export type AppRole = DbRole;
 
 export interface AppUser {
   id: string;
@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (resolvingRef.current) return;
       resolvingRef.current = true;
       try {
-        const profile = await fetchProfile(authUser.id);
+        const profile = await fetchProfile(authUser.id, authUser.email);
         if (profile) {
           const fullUser = profileToUser(authUser, profile);
           setUser(fullUser);
