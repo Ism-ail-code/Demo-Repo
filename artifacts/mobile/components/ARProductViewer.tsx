@@ -3,6 +3,7 @@ import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Animated,
   Dimensions,
   PanResponder,
@@ -338,6 +339,13 @@ export function ARProductViewer({
   const handleBuyNow = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     onBuyNow?.();
+    if (!isSafeHttpsUrl(product.checkoutUrl)) {
+      Alert.alert(
+        "Buy link unavailable",
+        "This product does not have a buy link yet. Check back soon."
+      );
+      return;
+    }
     await WebBrowser.openBrowserAsync(product.checkoutUrl);
   };
 
