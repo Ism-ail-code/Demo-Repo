@@ -17,6 +17,7 @@ import { ColorSwatch } from "@/components/ColorSwatch";
 import { NativeARSession } from "@/components/NativeARSession";
 import { ColorVariant, Product } from "@/constants/products";
 import { useColors } from "@/hooks/useColors";
+import { isSafeHttpsUrl } from "@/services/productService";
 
 interface ARProductViewerProps {
   product: Product;
@@ -55,9 +56,6 @@ function touchAngle(
 ) {
   return Math.atan2(b.pageY - a.pageY, b.pageX - a.pageX) * (180 / Math.PI);
 }
-
-const TEST_GLB_URL =
-  "https://okoloionftfxyvscfvhh.supabase.co/storage/v1/object/public/models/pixellabs-treasure-chest-4062.glb";
 
 export function ARProductViewer({
   product,
@@ -349,21 +347,37 @@ export function ARProductViewer({
     console.warn("AR Error:", message);
   }, []);
 
+  const modelUrl = isSafeHttpsUrl(product.glbUrl) ? product.glbUrl : "";
+  const hasModel = modelUrl.length > 0;
+
   return (
     <GestureHandlerRootView style={styles.fill}>
       <View style={styles.fill} removeClippedSubviews={true}>
         <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-          <NativeARSession
-            glbUrl={TEST_GLB_URL}
-            usdzUrl={product.usdzUrl}
-            color={selectedVariant.color}
-            modelPosition={modelPosition}
-            modelScale={modelScale}
-            modelRotation={modelRotation}
-            isLatched={isLatched}
-            onAnchorFound={onARAnchorFound}
-            onError={onARError}
-          />
+          {hasModel ? (
+            <NativeARSession
+              glbUrl={modelUrl}
+              usdzUrl={product.usdzUrl}
+              color={selectedVariant.color}
+              modelPosition={modelPosition}
+              modelScale={modelScale}
+              modelRotation={modelRotation}
+              isLatched={isLatched}
+              onAnchorFound={onARAnchorFound}
+              onError={onARError}
+            />
+          ) : (
+            <View style={styles.noModelContainer}>
+              <View style={styles.noModelCard}>
+                <Feather name="box" size={28} color="rgba(255,255,255,0.7)" />
+                <Text style={styles.noModelTitle}>No AR model yet</Text>
+                <Text style={styles.noModelBody}>
+                  This product does not have a 3D preview available yet. You
+                  can still view details or buy it below.
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
 
         <View
@@ -656,5 +670,30 @@ const styles = StyleSheet.create({
   },
   latchOverlay: {
     backgroundColor: "rgba(167, 139, 250, 0.06)",
+  },
+  noModelContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#0A0A0A",
+  },
+  noModelCard: {
+    alignItems: "center",
+    gap: 10,
+    maxWidth: 280,
+    padding: 24,
+  },
+  noModelTitle: {
+    color: "#fff",
+    fontSize: 17,
+    fontFamily: "Inter_700Bold",
+    marginTop: 4,
+  },
+  noModelBody: {
+    color: "rgba(255,255,255,0.55)",
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    lineHeight: 19,
   },
 });
