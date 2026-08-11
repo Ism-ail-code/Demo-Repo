@@ -1,5 +1,22 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
+
 import { ColorVariant, Product, SAMPLE_PRODUCTS } from "@/constants/products";
 import { DbMerchant, DbProduct, DbVariant, supabase } from "./supabase";
+
+export type RapidifyEventName =
+  | "product_view"
+  | "page_view"
+  | "ar_widget_visible"
+  | "ar_launch"
+  | "ar_session_end"
+  | "add_to_cart"
+  | "purchase_completed"
+  | "buy_click"
+  | "qr_open"
+  | "embed_open"
+  | "variant_switch"
+  | "session_start";
 
 const DEFAULT_BRAND_COLOR = "#7c3aed";
 
@@ -180,5 +197,64 @@ export async function fetchTrendingProducts(limit = 10): Promise<Product[]> {
   } catch (err) {
     console.warn("[Supabase] fetchTrending exception:", err);
     return SAMPLE_PRODUCTS.filter((p) => p.category !== "Demo");
+  }
+}
+
+// ─── Analytics ────────────────────────────────────────────────────────────────
+
+export interface TrackEventPayload {
+  event_type: RapidifyEventName;
+  product_id?: string | null;
+  merchant_id?: string | null;
+  business_id?: string | null;
+  variant_id?: string | null;
+  duration_ms?: number | null;
+  source?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+const SESSION_STORAGE_KEY = "ar_commerce_session_id";
+let cachedSessionId: string | null = null;
+
+async function getSessionId(): Promise<string> {
+  if (cachedSessionId) return cachedSessionId;
+  try {
+    cachedSessionId = await AsyncStorage.getItem(SESSION_STORAGE_KEY);
+  } catch {}
+  if (!cachedSessionId) {
+    cachedSessionId =
+      "ms_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
+    try {
+      await AsyncStorage.setItem(SESSION_STORAGE_KEY, cachedSessionId);
+    } catch {}
+  }
+  return cachedSessionId;
+}
+
+export async function trackEvent(payload: TrackEventPayload): Promise<void> {
+  try {
+    const sessionId = await getSessionId();
+    const { error } = await supabase.from("analytics_events").insert({
+      event_type: payload.event_type,
+      session_id: sessionId,
+      product_id: payload.product_id ?? null,
+      merchant_id: payload.merchant_id ?? null,
+      business_id: payload.business_id ?? null,
+      variant_id: payload.variant_id ?? null,
+      metadata:
+        payload.duration_ms != null || payload.source != null
+          ? {
+              duration_ms: payload.duration_ms ?? null,
+              source: payload.source ?? null,
+              ...(payload.metadata ?? {}),
+            }
+          : payload.metadata ?? null,
+      user_agent: `RapidifyMobile/${Platform.OS}/${Platform.Version ?? "unknown"}`,
+    });
+    if (error) {
+      console.warn("[Supabase] analytics insert error:", error.code, error.message);
+    }
+  } catch (err) {
+    console.warn("[Supabase] analytics insert exception:", err);
   }
 }
